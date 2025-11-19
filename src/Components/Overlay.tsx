@@ -14,7 +14,7 @@ export const Overlay: React.FC<OverlayProps> = ({
   const columnWidths = useSpreadsheetStore((state) => state.columnWidths);
   const rowHeights = useSpreadsheetStore((state) => state.rowHeights);
   
-  console.log('SELECTED:', selectedCell);
+  //console.log('SELECTED:', selectedCell);
   
   return selectedCell ? (
     <div 
