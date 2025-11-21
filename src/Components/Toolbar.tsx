@@ -79,12 +79,12 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ label, items }) => {
 };
 
 const Toolbar: React.FC = () => {
-  const selectedCell = useSpreadsheetStore((state) => state.selectedCell);
+  const currentCell = useSpreadsheetStore((state) => state.currentCell);
   const cells = useSpreadsheetStore((state) => state.cells);
   const setCell = useSpreadsheetStore((state) => state.setCell);
   const setCellStyle = useSpreadsheetStore((state) => state.setCellStyle);
 
-  const cellKey = selectedCell ? `${selectedCell.row}-${selectedCell.col}` : null;
+  const cellKey = currentCell ? `${currentCell.row}-${currentCell.col}` : null;
   const cellData = cellKey ? cells.get(cellKey) : null;
   const cellValue = cellData?.value || '';
   const cellStyle = cellData?.style || {};
@@ -93,40 +93,40 @@ const Toolbar: React.FC = () => {
 
   useEffect(() => {
     setFormulaBarValue(cellValue);
-  }, [cellValue, selectedCell]);
+  }, [cellValue, currentCell]);
 
   const handleFormulaBarChange = (value: string) => {
     setFormulaBarValue(value);
-    if (selectedCell) {
-      setCell(selectedCell.row, selectedCell.col, value);
+    if (currentCell) {
+      setCell(currentCell.row, currentCell.col, value);
     }
   };
 
   const toggleStyle = (property: string, value: string) => {
-    if (!selectedCell) return;
+    if (!currentCell) return;
     const currentValue = cellStyle[property as keyof typeof cellStyle];
     const newValue = currentValue === value ? 'normal' : value;
-    setCellStyle(selectedCell.row, selectedCell.col, { [property]: newValue });
+    setCellStyle(currentCell.row, currentCell.col, { [property]: newValue });
   };
 
   const setAlignment = (align: string) => {
-    if (!selectedCell) return;
-    setCellStyle(selectedCell.row, selectedCell.col, { textAlign: align });
+    if (!currentCell) return;
+    setCellStyle(currentCell.row, currentCell.col, { textAlign: align });
   };
 
   const setFontSize = (size: string) => {
-    if (!selectedCell) return;
-    setCellStyle(selectedCell.row, selectedCell.col, { fontSize: size });
+    if (!currentCell) return;
+    setCellStyle(currentCell.row, currentCell.col, { fontSize: size });
   };
 
   const setTextColor = (color: string) => {
-    if (!selectedCell) return;
-    setCellStyle(selectedCell.row, selectedCell.col, { color });
+    if (!currentCell) return;
+    setCellStyle(currentCell.row, currentCell.col, { color });
   };
 
   const setBackgroundColor = (color: string) => {
-    if (!selectedCell) return;
-    setCellStyle(selectedCell.row, selectedCell.col, { backgroundColor: color });
+    if (!currentCell) return;
+    setCellStyle(currentCell.row, currentCell.col, { backgroundColor: color });
   };
 
   const fileMenuItems = [
@@ -212,7 +212,7 @@ const Toolbar: React.FC = () => {
           className="px-2 py-1 border border-gray-300 rounded text-sm"
           value={cellStyle.fontSize || '14px'}
           onChange={(e) => setFontSize(e.target.value)}
-          disabled={!selectedCell}
+          disabled={!currentCell}
         >
           <option value="10px">10</option>
           <option value="12px">12</option>
@@ -229,7 +229,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${isBold ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => toggleStyle('fontWeight', 'bold')}
-          disabled={!selectedCell}
+          disabled={!currentCell}
           title="Bold"
         >
           <Bold size={18} />
@@ -237,7 +237,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${isItalic ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => toggleStyle('fontStyle', 'italic')}
-          disabled={!selectedCell}
+          disabled={!currentCell}
           title="Italic"
         >
           <Italic size={18} />
@@ -245,7 +245,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${isUnderline ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => toggleStyle('textDecoration', 'underline')}
-          disabled={!selectedCell}
+          disabled={!currentCell}
           title="Underline"
         >
           <Underline size={18} />
@@ -255,27 +255,27 @@ const Toolbar: React.FC = () => {
 
         {/* Text Color */}
         <div className="relative group">
-          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!selectedCell} title="Text Color">
+          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!currentCell} title="Text Color">
             <Type size={18} />
           </button>
           <input
             type="color"
             className="absolute opacity-0 w-8 h-8 cursor-pointer"
             onChange={(e) => setTextColor(e.target.value)}
-            disabled={!selectedCell}
+            disabled={!currentCell}
           />
         </div>
 
         {/* Background Color */}
         <div className="relative group">
-          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!selectedCell} title="Fill Color">
+          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!currentCell} title="Fill Color">
             <Palette size={18} />
           </button>
           <input
             type="color"
             className="absolute opacity-0 w-8 h-8 cursor-pointer"
             onChange={(e) => setBackgroundColor(e.target.value)}
-            disabled={!selectedCell}
+            disabled={!currentCell}
           />
         </div>
 
@@ -285,7 +285,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${cellStyle.textAlign === 'left' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => setAlignment('left')}
-          disabled={!selectedCell}
+          disabled={!currentCell}
           title="Align Left"
         >
           <AlignLeft size={18} />
@@ -293,7 +293,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${cellStyle.textAlign === 'center' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => setAlignment('center')}
-          disabled={!selectedCell}
+          disabled={!currentCell}
           title="Align Center"
         >
           <AlignCenter size={18} />
@@ -301,7 +301,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${cellStyle.textAlign === 'right' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => setAlignment('right')}
-          disabled={!selectedCell}
+          disabled={!currentCell}
           title="Align Right"
         >
           <AlignRight size={18} />
@@ -311,14 +311,14 @@ const Toolbar: React.FC = () => {
       {/* Formula Bar */}
       <div className="flex items-center gap-2 px-2 py-2">
         <div className="font-mono text-sm font-semibold min-w-[60px]">
-          {selectedCell ? `${String.fromCharCode(65 + selectedCell.col)}${selectedCell.row + 1}` : ''}
+          {currentCell ? `${String.fromCharCode(65 + currentCell.col)}${currentCell.row + 1}` : ''}
         </div>
         <input
           type="text"
           value={formulaBarValue}
           onChange={(e) => handleFormulaBarChange(e.target.value)}
           placeholder="Enter value or formula"
-          disabled={!selectedCell}
+          disabled={!currentCell}
           className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-400"
         />
       </div>

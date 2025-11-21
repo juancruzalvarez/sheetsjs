@@ -26,8 +26,10 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
 
   const value = cellData.value;
   const setCell = useSpreadsheetStore((s) => s.setCell);
-  const setSelected = useSpreadsheetStore((s) => s.setSelectedCell);
-
+  const extendSelection = useSpreadsheetStore((s) => s.extendSelection);
+  const startSelection = useSpreadsheetStore((s) => s.startSelection);
+  const endSelection = useSpreadsheetStore((s) => s.endSelection);
+  const isSelecting = useSpreadsheetStore((s) => s.isSelecting);
   const handleChange = useCallback((newValue: string) => {
     setEditValue(newValue);
     setCell(row, col, newValue);
@@ -42,10 +44,32 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
     setEditing(false);
   }, []);
 
+  const onMouseDown = (e: MouseEvent) => {
+    const cell = {row: row, col: col};
+    if(e.shiftKey) {
+      extendSelection(cell)
+    }else {
+      startSelection(cell, e.ctrlKey);
+    }
+  }
+  const onMouseEnter = () => {
+    if(isSelecting) {
+      const cell = {row: row, col: col};
+      extendSelection(cell)
+    }
+  }
+  const onMouseUp = (e: MouseEvent) => {
+    if(isSelecting) {
+    endSelection()
+    }
+  }
+
   return (
     <div
       className="absolute flex items-center px-2 text-sm border border-gray-200 select-none"
-      onClick={() => { setSelected(row, col); }}
+      onMouseDown={onMouseDown}
+      onMouseUp={onMouseUp}
+      onMouseEnter={onMouseEnter}
       onDoubleClick={startEdit}
       style={{
         position: 'absolute',
@@ -53,7 +77,7 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
         left,
         height: `${height}px`,
         width: `${width}px`,
-        //...cellData.style, 
+        ...cellData.style, 
       }}
     >
       {editing ? (

@@ -10,17 +10,17 @@ export const Overlay: React.FC<OverlayProps> = ({
   cumulativeRowHeights,
   cumulativeColWidths,
 }) => {
-  const selectedCell = useSpreadsheetStore((state) => state.selectedCell);
+  const selectedCell = useSpreadsheetStore((state) => state.currentCell);
   const columnWidths = useSpreadsheetStore((state) => state.columnWidths);
   const rowHeights = useSpreadsheetStore((state) => state.rowHeights);
   const selectionRanges = useSpreadsheetStore((state) => state.selectionRanges);
-  //console.log('SELECTED:', selectedCell);
+  console.log('SELECTED:', selectedCell);
 
   return (
     <>
       {selectedCell && (
         <div
-          className="absolute border-2 border-blue-400 pointer-events-none"
+          className="absolute border-3 border-blue-400 pointer-events-none z-10"
           style={{
             pointerEvents: "none",
             left: cumulativeColWidths[selectedCell.col],

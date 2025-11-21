@@ -32,8 +32,6 @@ export interface SpreadsheetStore {
 
   resizeRulerPos: { x: number | null; y: number | null };
 
-  selectedCell: CellPos | null;
-
   // Selection
   selectionRanges: SelectionRange[];
   isSelecting?: boolean;
@@ -43,7 +41,6 @@ export interface SpreadsheetStore {
   setCell: (row: number, col: number, value: any) => void;
   setCellStyle: (row: number, col: number, style: React.CSSProperties) => void;
 
-  setSelectedCell: (row: number, col: number) => void;
 
   setColumnWidth: (index: number, width: number) => void;
   setRowHeight: (index: number, height: number) => void;
@@ -102,10 +99,6 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       }));
     },
 
-    setSelectedCell: (row, col) => {
-      set({ selectedCell: { row, col } });
-    },
-
     setColumnWidth: (index, width) => {
       const newWidths = new Map(get().columnWidths);
       newWidths.set(index, width);
@@ -137,8 +130,14 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       if (!ranges.length) return;
 
       const last = ranges[ranges.length - 1];
-      const updatedLast = { ...last, end: cell };
-
+      const currentCell = get().currentCell;
+      let start = {col: 0, row: 0};
+      let end = {col: 0, row: 0};
+      if(currentCell) {
+        start = {col: Math.min(currentCell.col, cell.col), row:  Math.min(currentCell.row, cell.row)}
+        end = {col: Math.max(currentCell.col, cell.col), row:  Math.max(currentCell.row, cell.row)}
+      }
+      const updatedLast = { start:start, end: end };
       set({
         selectionRanges: [...ranges.slice(0, -1), updatedLast],
       });
