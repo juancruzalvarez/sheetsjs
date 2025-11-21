@@ -5,11 +5,11 @@ import {
   kDefaultColWidth,
   kDefaultRowHeight,
 } from "../constants";
-
-
+import { CSSProperties } from "react";
 
 export interface Cell {
   value: any;
+  style: CSSProperties;
 }
 
 export interface CellPos {
@@ -41,6 +41,8 @@ export interface SpreadsheetStore {
 
   // Actions
   setCell: (row: number, col: number, value: any) => void;
+  setCellStyle: (row: number, col: number, style: React.CSSProperties) => void;
+
   setSelectedCell: (row: number, col: number) => void;
 
   setColumnWidth: (index: number, width: number) => void;
@@ -55,7 +57,6 @@ export interface SpreadsheetStore {
   isCellSelected: (row: number, col: number) => boolean;
 }
 
-
 export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
   const rowCount = kStartRowCount;
   const columnCount = kStartColCount;
@@ -64,10 +65,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
   const rowHeights = new Map<number, number>();
 
   // Dynamic first column width based on row count digit count
-  const firstColWidth = Math.max(
-    30,
-    String(rowCount).length * 12 + 16,
-  );
+  const firstColWidth = Math.max(30, String(rowCount).length * 12 + 16);
   columnWidths.set(0, firstColWidth);
   rowHeights.set(0, 30);
 
@@ -82,7 +80,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     resizeRulerPos: { x: null, y: null },
     selectedCell: null,
 
-    selectionRanges: [],
+    selectionRanges: [{start:{col:2,row:1}, end:{col:4,row:10}}, {start:{col:5,row:6}, end:{col:6,row:10}}],
 
     setCell: (row, col, value) => {
       const key = `${row}-${col}`;
@@ -90,8 +88,18 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       const existing = cells.get(key);
       if (existing?.value === value) return;
 
-      cells.set(key, { value });
+      cells.set(key, {style: existing? existing.style:{}, value: value });
       set({ cells });
+    },
+    setCellStyle: (row: number, col: number, style: React.CSSProperties) => {
+      const key = `${row}-${col}`;
+      const existing = get().cells.get(key) || { value: "", style: {} };
+      set((state) => ({
+        cells: new Map(state.cells).set(key, {
+          ...existing,
+          style: { ...existing.style, ...style },
+        }),
+      }));
     },
 
     setSelectedCell: (row, col) => {
@@ -147,12 +155,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         const left = Math.min(start.col, end.col);
         const right = Math.max(start.col, end.col);
 
-        return (
-          row >= top &&
-          row <= bottom &&
-          col >= left &&
-          col <= right
-        );
+        return row >= top && row <= bottom && col >= left && col <= right;
       });
     },
   };

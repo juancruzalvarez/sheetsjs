@@ -83,7 +83,7 @@ export const HeaderCellCol = ({
   return (
     <div
       ref={cellRef}
-      className="absolute bg-gray-100 font-bold text-center border-b border-r select-none"
+      className="absolute bg-white font-medium text-center border-b border-r select-none"
       style={{
         top: 0,
         left,
@@ -168,7 +168,7 @@ export const HeaderCellRow = ({
   return (
     <div
       ref={cellRef}
-      className="absolute bg-gray-100 font-bold text-center border-b border-r select-none"
+      className="absolute font-medium bg-white  text-center border-b border-r select-none"
       style={{
         top,
         left: 0,

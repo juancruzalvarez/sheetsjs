@@ -215,7 +215,7 @@ const Spreadsheet: React.FC = () => {
       />
       
       <div 
-        className="sticky bg-gray-300"
+        className="sticky  bg-white border-r border-b"
         style={{ 
           top: 0,
           left: 0,
@@ -224,11 +224,11 @@ const Spreadsheet: React.FC = () => {
           zIndex: 50
         }}
       >
-        #
+        
       </div>
       
       <div 
-        className="sticky bg-gray-300"
+        className="sticky bg-white"
         style={{ 
           top: 0,
           height: fixedHeight,
@@ -252,7 +252,7 @@ const Spreadsheet: React.FC = () => {
       </div>
 
       <div 
-        className="sticky bg-gray-300"
+        className="sticky bg-white"
         style={{ 
           left: 0,
           width: fixedWidth,

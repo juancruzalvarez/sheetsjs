@@ -1,12 +1,12 @@
-import Navbar from "./Components/Navbar"
 import Spreadsheet from "./Components/Spreadsheet"
+import Toolbar from "./Components/Toolbar"
 
 const App = () => {
 
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
-      <Navbar />
+      <Toolbar />
       <Spreadsheet />
     </div>
   )
