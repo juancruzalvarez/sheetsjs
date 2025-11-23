@@ -1,7 +1,7 @@
-// FormulaEditor.tsx - Professional code editor using Monaco Editor
 import React, { useState, useEffect, useRef } from 'react';
 import { useSpreadsheetStore } from '../Stores/spreadsheetStore';
 import { X, Play, AlertCircle, Check, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { cellRefToPosition } from '../Services/utils';
 
 interface EditorProps {
   onClose: () => void;
@@ -34,8 +34,11 @@ const loadMonacoEditor = (): Promise<any> => {
   });
 };
 
+interface HelperSidebarProps {
+  insertExample: (example: string) => void;
+}
 
-export const HelperSidebar = ({ insertExample }) => {
+export const HelperSidebar: React.FC<HelperSidebarProps> = ({ insertExample }) => {
   const [open, setOpen] = useState(true);
 
   return (
@@ -58,13 +61,11 @@ export const HelperSidebar = ({ insertExample }) => {
       {/* Collapsible Content */}
       {open && (
         <div className="max-h-64 overflow-y-auto">
-          {/* Your original content goes here */}
           <div className="p-4">
             <div className="text-xs font-semibold text-gray-300 mb-3">
               Available Functions:
             </div>
             <div className="space-y-2 text-xs">
-
               {/* Cell Reference */}
               <div className="space-y-1">
                 <div className="text-gray-500 font-semibold">Cell Reference</div>
@@ -87,7 +88,6 @@ export const HelperSidebar = ({ insertExample }) => {
                   <code className="text-purple-400">sum(...nums)</code>
                   <span className="text-gray-400"> - Sum numbers</span>
                 </button>
-
                 <button 
                   onClick={() => insertExample('=avg(10, 20, 30)')}
                   className="block w-full text-left hover:bg-gray-700 p-1.5 rounded transition-colors"
@@ -95,7 +95,6 @@ export const HelperSidebar = ({ insertExample }) => {
                   <code className="text-purple-400">avg(...nums)</code>
                   <span className="text-gray-400"> - Average</span>
                 </button>
-
                 <div className="text-gray-400 pl-1.5">
                   <code className="text-purple-400">max, min, round, floor, ceil, abs</code>
                 </div>
@@ -111,7 +110,6 @@ export const HelperSidebar = ({ insertExample }) => {
                   <code className="text-purple-400">upper(str)</code>
                   <span className="text-gray-400"> - Uppercase</span>
                 </button>
-
                 <div className="text-gray-400 pl-1.5">
                   <code className="text-purple-400">lower, trim, concat</code>
                 </div>
@@ -127,12 +125,10 @@ export const HelperSidebar = ({ insertExample }) => {
                   <code className="text-purple-400">today()</code>
                   <span className="text-gray-400"> - Current date</span>
                 </button>
-
                 <div className="text-gray-400 pl-1.5">
                   <code className="text-purple-400">now()</code>
                 </div>
               </div>
-
             </div>
           </div>
 
@@ -150,7 +146,7 @@ export const HelperSidebar = ({ insertExample }) => {
                 onClick={() => insertExample('=sum(range(1, 10))')}
                 className="block w-full text-left hover:bg-gray-700 p-1.5 rounded transition-colors text-gray-400"
               >
-                <code>=sum(range(1, 10))</code> - Sum 1–10
+                <code>=sum(range(1, 10))</code> - Sum 1-10
               </button>
               <button 
                 onClick={() => insertExample('=cell("A1") * cell("B1")')}
@@ -173,13 +169,15 @@ export const HelperSidebar = ({ insertExample }) => {
 };
 
 const Editor: React.FC<EditorProps> = ({ onClose }) => {
-  const selectedCell = useSpreadsheetStore((state) => state.currentCell);
+  const currentCell = useSpreadsheetStore((state) => state.currentCell);
   const cells = useSpreadsheetStore((state) => state.cells);
-  const setCell = useSpreadsheetStore((state) => state.setCell);
+  const setCellFormula = useSpreadsheetStore((state) => state.setCellFormula);
   
-  const cellKey = selectedCell ? `${selectedCell.row}-${selectedCell.col}` : null;
+  const cellKey = currentCell ? `${currentCell.row}-${currentCell.col}` : null;
   const cellData = cellKey ? cells.get(cellKey) : null;
-  const initialValue = cellData?.value || '';
+  
+  // Use formula if it exists, otherwise use rawValue
+  const initialValue = cellData?.formula || cellData?.rawValue?.toString() || '';
 
   const [code, setCode] = useState(initialValue);
   const [result, setResult] = useState<string>('');
@@ -225,10 +223,6 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
     editorInstance.onDidChangeModelContent(() => {
       const value = editorInstance.getValue();
       setCode(value);
-      // Auto-update cell
-      if (selectedCell) {
-        setCell(selectedCell.row, selectedCell.col, value);
-      }
     });
 
     setEditor(editorInstance);
@@ -240,39 +234,40 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
 
   // Update editor when cell changes
   useEffect(() => {
-    if (editor && initialValue !== editor.getValue()) {
-      editor.setValue(initialValue);
+    const newValue = cellData?.formula || cellData?.rawValue?.toString() || '';
+    if (editor && newValue !== editor.getValue()) {
+      editor.setValue(newValue);
+      setCode(newValue);
     }
-  }, [initialValue, selectedCell]);
+  }, [cellData, currentCell, editor]);
 
   const getCellReference = () => {
-    if (!selectedCell) return '';
-    const col = String.fromCharCode(65 + selectedCell.col);
-    const row = selectedCell.row + 1;
+    if (!currentCell) return '';
+    const col = String.fromCharCode(65 + currentCell.col);
+    const row = currentCell.row + 1;
     return `${col}${row}`;
   };
 
   const executeFormula = () => {
-    if (!selectedCell) return;
+    if (!currentCell) return;
 
     try {
       setError('');
       
-      // Remove the leading '=' if present
-      const cleanCode = code.startsWith('=') ? code.slice(1) : code;
+      // Ensure code starts with =
+      const formula = code.startsWith('=') ? code : `=${code}`;
+      const cleanCode = formula.slice(1);
       
       // Create a safe execution context with helper functions
       const context = {
         // Helper to get cell values
         cell: (ref: string) => {
-          const match = ref.match(/^([A-Z]+)(\d+)$/);
-          if (!match) return null;
+          const pos = cellRefToPosition(ref);
+          if (!pos) return null;
           
-          const col = match[1].charCodeAt(0) - 65;
-          const row = parseInt(match[2]) - 1;
-          
-          const key = `${row}-${col}`;
-          return cells.get(key)?.value || '';
+          const key = `${pos.row}-${pos.col}`;
+          const refCell = cells.get(key);
+          return refCell?.rawValue || '';
         },
         
         // Math helpers
@@ -310,8 +305,8 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
       const resultString = String(calculatedResult);
       setResult(resultString);
       
-      // Update the cell with the formula (keeping the =)
-      setCell(selectedCell.row, selectedCell.col, code.startsWith('=') ? code : `=${code}`);
+      // Update the cell with the formula using setCellFormula
+      setCellFormula(currentCell.row, currentCell.col, formula);
       
     } catch (err: any) {
       setError(err.message || 'Error executing formula');
@@ -403,8 +398,8 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
           </div>
         )}
       </div>
-        <HelperSidebar insertExample={insertExample} />
       
+      <HelperSidebar insertExample={insertExample} />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSpreadsheetStore } from '../Stores/spreadsheetStore';
+import { DataType, Format } from '../Services/types';
 import {
   Bold,
   Italic,
@@ -7,15 +8,21 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
   ChevronDown,
   Save,
   FolderOpen,
   Download,
   Undo,
   Redo,
-  Type,
+  Type as TypeIcon,
   Palette,
+  Hash,
+  Calendar,
 } from 'lucide-react';
+import { getFormatOptionsForType } from '../Services/utils';
 
 interface DropdownMenuProps {
   label: string;
@@ -80,14 +87,91 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ label, items }) => {
 
 const Toolbar: React.FC = () => {
   const currentCell = useSpreadsheetStore((state) => state.currentCell);
+  const selectionRanges = useSpreadsheetStore((state) => state.selectionRanges);
   const cells = useSpreadsheetStore((state) => state.cells);
   const setCell = useSpreadsheetStore((state) => state.setCell);
   const setCellStyle = useSpreadsheetStore((state) => state.setCellStyle);
+  const setCellDataType = useSpreadsheetStore((state) => state.setCellDataType);
+  const setCellFormatting = useSpreadsheetStore((state) => state.setCellFormatting);
 
+  // Get all selected cell positions
+  const getSelectedCells = () => {
+    const selectedCells: Array<{row: number, col: number}> = [];
+    selectionRanges.forEach(range => {
+      const startRow = Math.min(range.start.row, range.end.row);
+      const endRow = Math.max(range.start.row, range.end.row);
+      const startCol = Math.min(range.start.col, range.end.col);
+      const endCol = Math.max(range.start.col, range.end.col);
+      
+      for (let r = startRow; r <= endRow; r++) {
+        for (let c = startCol; c <= endCol; c++) {
+          selectedCells.push({row: r, col: c});
+        }
+      }
+    });
+    return selectedCells;
+  };
+
+  const selectedCells = getSelectedCells();
+  const hasSelection = selectedCells.length > 0;
+
+  // Get current cell data for formula bar
   const cellKey = currentCell ? `${currentCell.row}-${currentCell.col}` : null;
   const cellData = cellKey ? cells.get(cellKey) : null;
-  const cellValue = cellData?.value || '';
-  const cellStyle = cellData?.style || {};
+  const cellValue = cellData?.formula || cellData?.rawValue?.toString() || '';
+
+  // Get collective styles (return null if mixed)
+  const getCollectiveStyle = (property: string): any => {
+    if (selectedCells.length === 0) return undefined;
+    
+    const firstCell = cells.get(`${selectedCells[0].row}-${selectedCells[0].col}`);
+    const firstValue = firstCell?.style?.[property as keyof typeof firstCell.style];
+    
+    const allSame = selectedCells.every(pos => {
+      const cell = cells.get(`${pos.row}-${pos.col}`);
+      return cell?.style?.[property as keyof typeof cell.style] === firstValue;
+    });
+    
+    return allSame ? firstValue : null;
+  };
+
+  const getCollectiveDataType = (): DataType | null => {
+    if (selectedCells.length === 0) return null;
+    
+    const firstCell = cells.get(`${selectedCells[0].row}-${selectedCells[0].col}`);
+    const firstType = firstCell?.dataType || 'undefined';
+    
+    const allSame = selectedCells.every(pos => {
+      const cell = cells.get(`${pos.row}-${pos.col}`);
+      return (cell?.dataType || 'undefined') === firstType;
+    });
+    
+    return allSame ? firstType : null;
+  };
+
+  const getCollectiveFormat = (): Format | null => {
+    if (selectedCells.length === 0) return null;
+    
+    const firstCell = cells.get(`${selectedCells[0].row}-${selectedCells[0].col}`);
+    const firstFormat = firstCell?.formatting || 'general';
+    
+    const allSame = selectedCells.every(pos => {
+      const cell = cells.get(`${pos.row}-${pos.col}`);
+      return (cell?.formatting || 'general') === firstFormat;
+    });
+    
+    return allSame ? firstFormat : null;
+  };
+
+  const fontWeight = getCollectiveStyle('fontWeight');
+  const fontStyle = getCollectiveStyle('fontStyle');
+  const textDecoration = getCollectiveStyle('textDecoration');
+  const textAlign = getCollectiveStyle('textAlign');
+  const verticalAlign = getCollectiveStyle('verticalAlign');
+  const fontSize = getCollectiveStyle('fontSize') || '14px';
+  
+  const cellDataType = getCollectiveDataType() || 'undefined';
+  const cellFormatting = getCollectiveFormat() || 'general';
 
   const [formulaBarValue, setFormulaBarValue] = useState(cellValue);
 
@@ -102,31 +186,58 @@ const Toolbar: React.FC = () => {
     }
   };
 
+  // Apply style to all selected cells
+  const applyStyleToSelection = (style: React.CSSProperties) => {
+    selectedCells.forEach(pos => {
+      setCellStyle(pos.row, pos.col, style);
+    });
+  };
+
   const toggleStyle = (property: string, value: string) => {
-    if (!currentCell) return;
-    const currentValue = cellStyle[property as keyof typeof cellStyle];
+    if (!hasSelection) return;
+    const currentValue = getCollectiveStyle(property);
     const newValue = currentValue === value ? 'normal' : value;
-    setCellStyle(currentCell.row, currentCell.col, { [property]: newValue });
+    applyStyleToSelection({ [property]: newValue });
   };
 
   const setAlignment = (align: string) => {
-    if (!currentCell) return;
-    setCellStyle(currentCell.row, currentCell.col, { textAlign: align });
+    if (!hasSelection) return;
+    applyStyleToSelection({ textAlign: align });
   };
 
-  const setFontSize = (size: string) => {
-    if (!currentCell) return;
-    setCellStyle(currentCell.row, currentCell.col, { fontSize: size });
+  const setVerticalAlignment = (align: string) => {
+    if (!hasSelection) return;
+    applyStyleToSelection({ 
+      verticalAlign: align, 
+      alignItems: align === 'top' ? 'flex-start' : align === 'middle' ? 'center' : 'flex-end' 
+    });
+  };
+
+  const setFontSizeToSelection = (size: string) => {
+    if (!hasSelection) return;
+    applyStyleToSelection({ fontSize: size });
   };
 
   const setTextColor = (color: string) => {
-    if (!currentCell) return;
-    setCellStyle(currentCell.row, currentCell.col, { color });
+    if (!hasSelection) return;
+    applyStyleToSelection({ color });
   };
 
   const setBackgroundColor = (color: string) => {
-    if (!currentCell) return;
-    setCellStyle(currentCell.row, currentCell.col, { backgroundColor: color });
+    if (!hasSelection) return;
+    applyStyleToSelection({ backgroundColor: color });
+  };
+
+  const handleDataTypeChange = (dataType: DataType) => {
+    selectedCells.forEach(pos => {
+      setCellDataType(pos.row, pos.col, dataType);
+    });
+  };
+
+  const handleFormatChange = (format: Format) => {
+    selectedCells.forEach(pos => {
+      setCellFormatting(pos.row, pos.col, format);
+    });
   };
 
   const fileMenuItems = [
@@ -160,17 +271,22 @@ const Toolbar: React.FC = () => {
   ];
 
   const formatMenuItems = [
-    { label: 'Number', onClick: () => console.log('Number') },
-    { label: 'Currency', onClick: () => console.log('Currency') },
-    { label: 'Percentage', onClick: () => console.log('Percentage') },
-    { label: 'Date', onClick: () => console.log('Date') },
-    { divider: true, label: '', onClick: () => {} },
     { label: 'Clear Formatting', onClick: () => console.log('Clear') },
   ];
 
-  const isBold = cellStyle.fontWeight === 'bold';
-  const isItalic = cellStyle.fontStyle === 'italic';
-  const isUnderline = cellStyle.textDecoration === 'underline';
+  const isBold = fontWeight === 'bold';
+  const isItalic = fontStyle === 'italic';
+  const isUnderline = textDecoration === 'underline';
+
+  const availableFormats = getFormatOptionsForType(cellDataType);
+
+  const dataTypeIcon = () => {
+    switch (cellDataType) {
+      case 'number': return <Hash size={14} />;
+      case 'date': return <Calendar size={14} />;
+      default: return <TypeIcon size={14} />;
+    }
+  };
 
   return (
     <div className="border-b border-gray-300 bg-white">
@@ -207,12 +323,56 @@ const Toolbar: React.FC = () => {
 
         <div className="w-px h-6 bg-gray-300 mx-1" />
 
+        {/* Data Type Selector */}
+        <div className="flex items-center gap-1">
+          <div className="text-xs text-gray-500">Type:</div>
+          <select
+            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            value={cellDataType}
+            onChange={(e) => handleDataTypeChange(e.target.value as DataType)}
+            disabled={!hasSelection}
+          >
+            <option value="undefined">Auto</option>
+            <option value="number">Number</option>
+            <option value="string">String</option>
+            <option value="boolean">Boolean</option>
+            <option value="date">Date</option>
+            <option value="array">Array</option>
+            <option value="object">Object</option>
+          </select>
+        </div>
+
+        {/* Format Selector */}
+        <div className="flex items-center gap-1">
+          <div className="text-xs text-gray-500">Format:</div>
+          <select
+            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            value={cellFormatting}
+            onChange={(e) => handleFormatChange(e.target.value as Format)}
+            disabled={!hasSelection}
+          >
+            {availableFormats.map(format => (
+              <option key={format} value={format}>
+                {format === 'general' ? 'General' : 
+                 format === 'decimal2' ? '0.00' :
+                 format === 'decimal3' ? '0.000' :
+                 format === 'decimal4' ? '0.0000' :
+                 format === 'currency' ? '$#,##0.00' :
+                 format === 'percentage' ? '0%' :
+                 format}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="w-px h-6 bg-gray-300 mx-1" />
+
         {/* Font Size */}
         <select
           className="px-2 py-1 border border-gray-300 rounded text-sm"
-          value={cellStyle.fontSize || '14px'}
-          onChange={(e) => setFontSize(e.target.value)}
-          disabled={!currentCell}
+          value={fontSize}
+          onChange={(e) => setFontSizeToSelection(e.target.value)}
+          disabled={!hasSelection}
         >
           <option value="10px">10</option>
           <option value="12px">12</option>
@@ -229,7 +389,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${isBold ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => toggleStyle('fontWeight', 'bold')}
-          disabled={!currentCell}
+          disabled={!hasSelection}
           title="Bold"
         >
           <Bold size={18} />
@@ -237,7 +397,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${isItalic ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => toggleStyle('fontStyle', 'italic')}
-          disabled={!currentCell}
+          disabled={!hasSelection}
           title="Italic"
         >
           <Italic size={18} />
@@ -245,7 +405,7 @@ const Toolbar: React.FC = () => {
         <button
           className={`p-1.5 rounded ${isUnderline ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => toggleStyle('textDecoration', 'underline')}
-          disabled={!currentCell}
+          disabled={!hasSelection}
           title="Underline"
         >
           <Underline size={18} />
@@ -255,62 +415,91 @@ const Toolbar: React.FC = () => {
 
         {/* Text Color */}
         <div className="relative group">
-          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!currentCell} title="Text Color">
-            <Type size={18} />
+          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!hasSelection} title="Text Color">
+            <TypeIcon size={18} />
           </button>
           <input
             type="color"
             className="absolute opacity-0 w-8 h-8 cursor-pointer"
             onChange={(e) => setTextColor(e.target.value)}
-            disabled={!currentCell}
+            disabled={!hasSelection}
           />
         </div>
 
         {/* Background Color */}
         <div className="relative group">
-          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!currentCell} title="Fill Color">
+          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!hasSelection} title="Fill Color">
             <Palette size={18} />
           </button>
           <input
             type="color"
             className="absolute opacity-0 w-8 h-8 cursor-pointer"
             onChange={(e) => setBackgroundColor(e.target.value)}
-            disabled={!currentCell}
+            disabled={!hasSelection}
           />
         </div>
 
         <div className="w-px h-6 bg-gray-300 mx-1" />
 
-        {/* Alignment */}
+        {/* Horizontal Alignment */}
         <button
-          className={`p-1.5 rounded ${cellStyle.textAlign === 'left' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
+          className={`p-1.5 rounded ${textAlign === 'left' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => setAlignment('left')}
-          disabled={!currentCell}
+          disabled={!hasSelection}
           title="Align Left"
         >
           <AlignLeft size={18} />
         </button>
         <button
-          className={`p-1.5 rounded ${cellStyle.textAlign === 'center' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
+          className={`p-1.5 rounded ${textAlign === 'center' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => setAlignment('center')}
-          disabled={!currentCell}
+          disabled={!hasSelection}
           title="Align Center"
         >
           <AlignCenter size={18} />
         </button>
         <button
-          className={`p-1.5 rounded ${cellStyle.textAlign === 'right' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
+          className={`p-1.5 rounded ${textAlign === 'right' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
           onClick={() => setAlignment('right')}
-          disabled={!currentCell}
+          disabled={!hasSelection}
           title="Align Right"
         >
           <AlignRight size={18} />
+        </button>
+
+        <div className="w-px h-6 bg-gray-300 mx-1" />
+
+        {/* Vertical Alignment */}
+        <button
+          className={`p-1.5 rounded ${verticalAlign === 'top' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
+          onClick={() => setVerticalAlignment('top')}
+          disabled={!hasSelection}
+          title="Align Top"
+        >
+          <AlignVerticalJustifyStart size={18} />
+        </button>
+        <button
+          className={`p-1.5 rounded ${verticalAlign === 'middle' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
+          onClick={() => setVerticalAlignment('middle')}
+          disabled={!hasSelection}
+          title="Align Middle"
+        >
+          <AlignVerticalJustifyCenter size={18} />
+        </button>
+        <button
+          className={`p-1.5 rounded ${verticalAlign === 'bottom' ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
+          onClick={() => setVerticalAlignment('bottom')}
+          disabled={!hasSelection}
+          title="Align Bottom"
+        >
+          <AlignVerticalJustifyEnd size={18} />
         </button>
       </div>
 
       {/* Formula Bar */}
       <div className="flex items-center gap-2 px-2 py-2">
-        <div className="font-mono text-sm font-semibold min-w-[60px]">
+        <div className="font-mono text-sm font-semibold min-w-[60px] flex items-center gap-1">
+          {dataTypeIcon()}
           {currentCell ? `${String.fromCharCode(65 + currentCell.col)}${currentCell.row + 1}` : ''}
         </div>
         <input
@@ -321,6 +510,11 @@ const Toolbar: React.FC = () => {
           disabled={!currentCell}
           className="flex-1 px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-400"
         />
+        {cellData?.error && (
+          <div className="text-xs text-red-600 max-w-xs truncate" title={cellData.error.message}>
+            Error: {cellData.error.message}
+          </div>
+        )}
       </div>
     </div>
   );
