@@ -258,7 +258,7 @@ const Toolbar: React.FC = () => {
 
   const setAlignment = (align: string) => {
     if (!hasSelection) return;
-    applyStyleToSelection({ textAlign: align });
+    applyStyleToSelection({ justifyContent: align });
   };
 
   const setVerticalAlignment = (align: string) => {

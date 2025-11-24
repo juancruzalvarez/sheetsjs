@@ -6,23 +6,10 @@ import Editor from "./Components/Editor";
 
 const App = () => {
   const [showFormulaEditor, setShowFormulaEditor] = useState(true);
-  const selectedCell = useSpreadsheetStore((state) => state.currentCell);
   window.addEventListener('openFormulaEditor', (event) => {
     setShowFormulaEditor(true);
   });
-  /* Open formula editor when cell starts with =
-  useSpreadsheetStore.subscribe(
-    (state) => {
-      if (state.currentCell) {
-        const key = `${state.currentCell.row}-${state.currentCell.col}`;
-        const cell = state.cells.get(key);
-        if (cell?.computed && cell.formula) {
-          setShowFormulaEditor(true);
-        }
-      }
-    }
-  );
-*/
+ 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <Toolbar />
@@ -30,7 +17,7 @@ const App = () => {
         <Spreadsheet />
         
         {/* Formula Editor Sidebar */}
-        {showFormulaEditor && selectedCell && (
+        {showFormulaEditor && (
           <Editor onClose={() => setShowFormulaEditor(false)} />
         )}
       </div>
