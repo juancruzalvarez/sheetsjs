@@ -253,11 +253,64 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
 
       const context = {
         cell: (ref: string) => {
+          // Normalize to uppercase
+          ref = ref.toUpperCase();
+          
+          // Check if it's a range (e.g., "A1:B5")
+          if (ref.includes(':')) {
+            const [start, end] = ref.split(':');
+            const startPos = cellRefToPosition(start);
+            const endPos = cellRefToPosition(end);
+            
+            if (!startPos || !endPos) return null;
+            
+            const startRow = Math.min(startPos.row, endPos.row);
+            const endRow = Math.max(startPos.row, endPos.row);
+            const startCol = Math.min(startPos.col, endPos.col);
+            const endCol = Math.max(startPos.col, endPos.col);
+            
+            // Check if it's a single row (1D horizontal array  )
+            if (startRow === endRow) {
+              const values = [];
+              for (let c = startCol; c <= endCol; c++) {
+                const key = `${startRow}-${c}`;
+                const cell = cells.get(key);
+                values.push(cell?.rawValue ?? 0);
+              }
+              return values;
+            }
+            
+            // Check if it's a single column (1D vertical array)
+            if (startCol === endCol) {
+              const values = [];
+              for (let r = startRow; r <= endRow; r++) {
+                const key = `${r}-${startCol}`;
+                const cell = cells.get(key);
+                values.push(cell?.rawValue ?? 0);
+              }
+              return values;
+            }
+            
+            // 2D array for multi-row, multi-column range
+            const values = [];
+            for (let r = startRow; r <= endRow; r++) {
+              const row = [];
+              for (let c = startCol; c <= endCol; c++) {
+                const key = `${r}-${c}`;
+                const cell = cells.get(key);
+                row.push(cell?.rawValue ?? 0);
+              }
+              values.push(row);
+            }
+            return values;
+          }
+          
+          // Single cell reference
           const pos = cellRefToPosition(ref);
           if (!pos) return null;
           const key = `${pos.row}-${pos.col}`;
           const refCell = cells.get(key);
-          return refCell?.rawValue || "";
+          return refCell?.rawValue ?? "";
         },
 
         sum: (...args: number[]) => args.reduce((a, b) => a + b, 0),

@@ -160,21 +160,60 @@ const formatDate = (value: Date | string, format: Format): string => {
   }
 };
 
-// Parse formula dependencies (cell references like A1, B2, etc.)
+// Parse formula dependencies: supports cell('a1'), cell("A2:B5"), case insensitive.
 export const parseFormulaDependencies = (formula: string): string[] => {
-  const dependencies: string[] = [];
-  
-  // Match cell references like A1, B2, AA10, etc.
-  const cellRefPattern = /cell\s*\(\s*['"]([A-Z]+\d+)['"]\s*\)/gi;
+  const deps: string[] = [];
+
+  // Match cell(...) with content like A1 or A1:B5, any case
+  const pattern = /cell\s*\(\s*['"]([a-z]+\d+(?::[a-z]+\d+)?)['"]\s*\)/gi;
+
   let match;
-  
-  while ((match = cellRefPattern.exec(formula)) !== null) {
-    const cellRef = match[1];
-    dependencies.push(cellRef);
+  while ((match = pattern.exec(formula)) !== null) {
+    const ref = match[1].toUpperCase(); // normalize
+
+    if (ref.includes(":")) {
+      // This is a range: A1:B5
+      const [start, end] = ref.split(":");
+
+      const startCol = colToIndex(start.replace(/\d+/g, ""));
+      const startRow = parseInt(start.replace(/\D+/g, ""), 10);
+
+      const endCol = colToIndex(end.replace(/\d+/g, ""));
+      const endRow = parseInt(end.replace(/\D+/g, ""), 10);
+
+      for (let c = startCol; c <= endCol; c++) {
+        for (let r = startRow; r <= endRow; r++) {
+          deps.push(indexToCol(c) + r);
+        }
+      }
+    } else {
+      // Single cell
+      deps.push(ref);
+    }
   }
-  
-  return dependencies;
+
+  return deps;
 };
+
+// Convert column letters → number (A=1, B=2, Z=26, AA=27, AB=28...)
+function colToIndex(col: string): number {
+  let idx = 0;
+  for (let i = 0; i < col.length; i++) {
+    idx = idx * 26 + (col.charCodeAt(i) - 64); // 'A' = 65
+  }
+  return idx;
+}
+
+// Convert number → column letters (1=A, 2=B, 27=AA...)
+function indexToCol(idx: number): string {
+  let col = "";
+  while (idx > 0) {
+    const rem = (idx - 1) % 26;
+    col = String.fromCharCode(65 + rem) + col;
+    idx = Math.floor((idx - 1) / 26);
+  }
+  return col;
+}
 
 // Convert cell reference like "A1" to {row, col}
 export const cellRefToPosition = (ref: string): { row: number; col: number } | null => {

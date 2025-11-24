@@ -24,33 +24,25 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
   const key = `${row}-${col}`;
   const cellData = cells.get(key);
 
-  // Use displayValue instead of rawValue for rendering
+  // ALWAYS show displayValue (the formatted/calculated result)
   const displayValue = cellData?.displayValue || '';
-  
-  // Only show error if cell has actual error (not just undefined)
   const hasError = cellData?.error !== null && cellData?.error !== undefined;
 
   const handleChange = useCallback((newValue: string) => {
     setEditValue(newValue);
-
-    // If user types '=' as first character, trigger formula editor
-    if (newValue.startsWith('=')) {
-      window.dispatchEvent(new CustomEvent('openFormulaEditor', {
-        detail: { row, col }
-      }));
-    }
-  }, [row, col]);
+  }, []);
 
   const handleCommit = useCallback(() => {
+    // Send to store - it will handle formula vs value
     setCell(row, col, editValue);
     setEditing(false);
   }, [row, col, editValue, setCell]);
 
   const startEdit = useCallback(() => {
     setEditing(true);
-    // Edit the raw value or formula
-    const currentValue = cellData?.formula || cellData?.rawValue?.toString() || '';
-    setEditValue(currentValue);
+    // EDIT THE SOURCE: formula if exists, otherwise rawValue
+    const sourceValue = cellData?.formula || cellData?.rawValue?.toString() || '';
+    setEditValue(sourceValue);
   }, [cellData]);
 
   const stopEdit = useCallback(() => {
@@ -81,7 +73,6 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
     }
   };
 
-  // Error styling - only apply if there's actually an error
   const errorStyle = hasError ? {
     backgroundColor: '#fee',
     color: '#c00',
@@ -114,11 +105,15 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
           onChange={(e) => handleChange(e.target.value)}
           onBlur={stopEdit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') stopEdit();
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              stopEdit();
+            }
             if (e.key === 'Escape') {
-              setEditValue(cellData?.rawValue?.toString() || '');
+              setEditValue(cellData?.formula || cellData?.rawValue?.toString() || '');
               setEditing(false);
             }
+            // Don't open editor on = anymore, that's confusing
           }}
           autoFocus
         />

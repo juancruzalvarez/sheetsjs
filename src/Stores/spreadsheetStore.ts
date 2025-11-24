@@ -1,4 +1,3 @@
-
 import { create } from "zustand";
 import {
   kStartColCount,
@@ -16,7 +15,13 @@ import {
   cellRefToPosition,
   positionToCellRef,
 } from "../Services/utils";
-import { Cell, CellPos, DataType, Format, SelectionRange } from "../Services/types";
+import {
+  Cell,
+  CellPos,
+  DataType,
+  Format,
+  SelectionRange,
+} from "../Services/types";
 
 export interface SpreadsheetStore {
   rowCount: number;
@@ -87,40 +92,45 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       const key = `${row}-${col}`;
       const existing = get().cells.get(key) || createDefaultCell();
 
-      // Handle empty strings - don't create error
-      if (value === '' || value === null || value === undefined) {
+      // Handle empty
+      if (value === "" || value === null || value === undefined) {
         const updatedCell: Cell = {
           ...existing,
-          rawValue: '',
-          displayValue: '',
-          dataType: 'undefined',
+          rawValue: "",
+          displayValue: "",
+          dataType: "undefined",
           computed: false,
           formula: null,
           error: null,
         };
-        
+
         set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell)
+          cells: new Map(state.cells).set(key, updatedCell),
         }));
+
+        // IMPORTANT: Recalculate dependents!
+        get().recalculateDependents(key);
         return;
       }
 
       // Check if it's a formula
-      const isFormula = typeof value === 'string' && value.startsWith('=');
+      const isFormula = typeof value === "string" && value.startsWith("=");
 
       if (isFormula) {
         get().setCellFormula(row, col, value);
       } else {
-        // Auto-detect type if no override
+        // Regular value
         const detectedType = detectDataType(value);
         const finalType = existing.dataTypeOverride || detectedType;
 
-        // Validate type if override exists
         let error = null;
-        if (existing.dataTypeOverride && !validateType(value, existing.dataTypeOverride)) {
+        if (
+          existing.dataTypeOverride &&
+          !validateType(value, existing.dataTypeOverride)
+        ) {
           error = {
             message: `Value doesn't match expected type: ${existing.dataTypeOverride}`,
-            type: 'type-mismatch' as const
+            type: "type-mismatch" as const,
           };
         }
 
@@ -136,8 +146,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         updatedCell.displayValue = formatCellValue(updatedCell);
 
         set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell)
+          cells: new Map(state.cells).set(key, updatedCell),
         }));
+
+        // IMPORTANT: Recalculate dependents!
+        get().recalculateDependents(key);
       }
     },
 
@@ -157,7 +170,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       });
 
       // Add new dependencies
-      dependencies.forEach(depRef => {
+      dependencies.forEach((depRef) => {
         const depPos = cellRefToPosition(depRef);
         if (depPos) {
           const depKey = `${depPos.row}-${depPos.col}`;
@@ -177,7 +190,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
       set((state) => ({
         cells: new Map(state.cells).set(key, updatedCell),
-        dependencyGraph: graph
+        dependencyGraph: graph,
       }));
 
       // Recalculate the cell
@@ -191,39 +204,102 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       if (!cell || !cell.computed || !cell.formula) return;
 
       try {
-        const cleanCode = cell.formula.startsWith('=') ? cell.formula.slice(1) : cell.formula;
+        const cleanCode = cell.formula.startsWith("=")
+          ? cell.formula.slice(1)
+          : cell.formula;
 
         // Create execution context
         const context = {
           cell: (ref: string) => {
+            // Normalize to uppercase
+            ref = ref.toUpperCase();
+
+            // Check if it's a range (e.g., "A1:B5")
+            if (ref.includes(":")) {
+              const [start, end] = ref.split(":");
+              const startPos = cellRefToPosition(start);
+              const endPos = cellRefToPosition(end);
+
+              if (!startPos || !endPos) return null;
+
+              const startRow = Math.min(startPos.row, endPos.row);
+              const endRow = Math.max(startPos.row, endPos.row);
+              const startCol = Math.min(startPos.col, endPos.col);
+              const endCol = Math.max(startPos.col, endPos.col);
+
+              // Check if it's a single row (1D horizontal array  )
+              if (startRow === endRow) {
+                const values = [];
+                for (let c = startCol; c <= endCol; c++) {
+                  const key = `${startRow}-${c}`;
+                  const cell = get().cells.get(key);
+                  values.push(cell?.rawValue ?? 0);
+                }
+                return values;
+              }
+
+              // Check if it's a single column (1D vertical array)
+              if (startCol === endCol) {
+                const values = [];
+                for (let r = startRow; r <= endRow; r++) {
+                  const key = `${r}-${startCol}`;
+                  const cell = get().cells.get(key);
+                  values.push(cell?.rawValue ?? 0);
+                }
+                return values;
+              }
+
+              // 2D array for multi-row, multi-column range
+              const values = [];
+              for (let r = startRow; r <= endRow; r++) {
+                const row = [];
+                for (let c = startCol; c <= endCol; c++) {
+                  const key = `${r}-${c}`;
+                  const cell = get().cells.get(key);
+                  row.push(cell?.rawValue ?? 0);
+                }
+                values.push(row);
+              }
+              return values;
+            }
+
+            // Single cell reference
             const pos = cellRefToPosition(ref);
             if (!pos) return null;
-            const refKey = `${pos.row}-${pos.col}`;
-            const refCell = get().cells.get(refKey);
-            return refCell?.rawValue || '';
+            const key = `${pos.row}-${pos.col}`;
+            const refCell = get().cells.get(key);
+            return refCell?.rawValue ?? "";
           },
+
           sum: (...args: number[]) => args.reduce((a, b) => a + b, 0),
-          avg: (...args: number[]) => args.reduce((a, b) => a + b, 0) / args.length,
+          avg: (...args: number[]) =>
+            args.reduce((a, b) => a + b, 0) / args.length,
           max: Math.max,
           min: Math.min,
           round: Math.round,
           floor: Math.floor,
           ceil: Math.ceil,
           abs: Math.abs,
-          concat: (...args: any[]) => args.join(''),
+
+          concat: (...args: any[]) => args.join(""),
           upper: (str: string) => str.toUpperCase(),
           lower: (str: string) => str.toLowerCase(),
           trim: (str: string) => str.trim(),
+
           range: (start: number, end: number) => {
             const arr = [];
             for (let i = start; i <= end; i++) arr.push(i);
             return arr;
           },
+
           now: () => new Date(),
           today: () => new Date().toLocaleDateString(),
         };
 
-        const func = new Function(...Object.keys(context), `return (${cleanCode})`);
+        const func = new Function(
+          ...Object.keys(context),
+          `return (${cleanCode})`
+        );
         const result = func(...Object.values(context));
 
         const detectedType = detectDataType(result);
@@ -239,24 +315,23 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         updatedCell.displayValue = formatCellValue(updatedCell);
 
         set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell)
+          cells: new Map(state.cells).set(key, updatedCell),
         }));
 
         // Recalculate dependents
         get().recalculateDependents(key);
-
       } catch (err: any) {
         const updatedCell: Cell = {
           ...cell,
           error: {
-            message: err.message || 'Formula error',
-            type: 'formula'
+            message: err.message || "Formula error",
+            type: "formula",
           },
-          displayValue: '#ERROR!'
+          displayValue: "#ERROR!",
         };
 
         set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell)
+          cells: new Map(state.cells).set(key, updatedCell),
         }));
       }
     },
@@ -267,8 +342,8 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
       if (!dependents) return;
 
-      dependents.forEach(depKey => {
-        const [row, col] = depKey.split('-').map(Number);
+      dependents.forEach((depKey) => {
+        const [row, col] = depKey.split("-").map(Number);
         get().recalculateCell(row, col);
       });
     },
@@ -280,8 +355,8 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       set((state) => ({
         cells: new Map(state.cells).set(key, {
           ...existing,
-          style: { ...existing.style, ...style }
-        })
+          style: { ...existing.style, ...style },
+        }),
       }));
     },
 
@@ -291,11 +366,15 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
       // Validate current value against new type
       let error = null;
-      if (existing.rawValue !== null && existing.rawValue !== undefined && existing.rawValue !== '') {
+      if (
+        existing.rawValue !== null &&
+        existing.rawValue !== undefined &&
+        existing.rawValue !== ""
+      ) {
         if (!validateType(existing.rawValue, dataType)) {
           error = {
             message: `Current value doesn't match type: ${dataType}`,
-            type: 'type-mismatch' as const
+            type: "type-mismatch" as const,
           };
         }
       }
@@ -310,7 +389,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       updatedCell.displayValue = formatCellValue(updatedCell);
 
       set((state) => ({
-        cells: new Map(state.cells).set(key, updatedCell)
+        cells: new Map(state.cells).set(key, updatedCell),
       }));
     },
 
@@ -326,7 +405,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       updatedCell.displayValue = formatCellValue(updatedCell);
 
       set((state) => ({
-        cells: new Map(state.cells).set(key, updatedCell)
+        cells: new Map(state.cells).set(key, updatedCell),
       }));
     },
 
@@ -364,8 +443,14 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       let start = { col: 0, row: 0 };
       let end = { col: 0, row: 0 };
       if (currentCell) {
-        start = { col: Math.min(currentCell.col, cell.col), row: Math.min(currentCell.row, cell.row) };
-        end = { col: Math.max(currentCell.col, cell.col), row: Math.max(currentCell.row, cell.row) };
+        start = {
+          col: Math.min(currentCell.col, cell.col),
+          row: Math.min(currentCell.row, cell.row),
+        };
+        end = {
+          col: Math.max(currentCell.col, cell.col),
+          row: Math.max(currentCell.row, cell.row),
+        };
       }
       const updatedLast = { start: start, end: end };
       set({
