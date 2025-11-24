@@ -85,6 +85,29 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({ label, items }) => {
   );
 };
 
+// Format display names
+const formatDisplayNames: Record<string, string> = {
+  'general': 'General',
+  'integer': 'Integer (0)',
+  'decimal2': 'Decimal (0.00)',
+  'decimal3': 'Decimal (0.000)',
+  'decimal4': 'Decimal (0.0000)',
+  'decimal6': 'Decimal (0.000000)',
+  'currency': 'Currency ($1,234.56)',
+  'percentage': 'Percentage (12.34%)',
+  'scientific': 'Scientific (1.23E+10)',
+  'string': 'Text',
+  'DDMMYYYY': 'Date (DD/MM/YYYY)',
+  'MMDDYYYY': 'Date (MM/DD/YYYY)',
+  'YYYYMMDD': 'Date (YYYY-MM-DD)',
+  'DDMM': 'Date (DD/MM)',
+  'MMDD': 'Date (MM/DD)',
+  'time': 'Time (HH:MM:SS)',
+  'datetime': 'Date & Time',
+  'array': 'Array',
+  'object': 'Object',
+};
+
 const Toolbar: React.FC = () => {
   const currentCell = useSpreadsheetStore((state) => state.currentCell);
   const selectionRanges = useSpreadsheetStore((state) => state.selectionRanges);
@@ -129,7 +152,8 @@ const Toolbar: React.FC = () => {
     
     const allSame = selectedCells.every(pos => {
       const cell = cells.get(`${pos.row}-${pos.col}`);
-      return cell?.style?.[property as keyof typeof cell.style] === firstValue;
+      const cellValue = cell?.style?.[property as keyof typeof cell.style];
+      return cellValue === firstValue;
     });
     
     return allSame ? firstValue : null;
@@ -193,10 +217,10 @@ const Toolbar: React.FC = () => {
     });
   };
 
-  const toggleStyle = (property: string, value: string) => {
+  const toggleStyle = (property: string, value: string, offValue: string = 'normal') => {
     if (!hasSelection) return;
     const currentValue = getCollectiveStyle(property);
-    const newValue = currentValue === value ? 'normal' : value;
+    const newValue = currentValue === value ? offValue : value;
     applyStyleToSelection({ [property]: newValue });
   };
 
@@ -208,7 +232,6 @@ const Toolbar: React.FC = () => {
   const setVerticalAlignment = (align: string) => {
     if (!hasSelection) return;
     applyStyleToSelection({ 
-      verticalAlign: align, 
       alignItems: align === 'top' ? 'flex-start' : align === 'middle' ? 'center' : 'flex-end' 
     });
   };
@@ -271,7 +294,11 @@ const Toolbar: React.FC = () => {
   ];
 
   const formatMenuItems = [
-    { label: 'Clear Formatting', onClick: () => console.log('Clear') },
+    { label: 'Clear Formatting', onClick: () => {
+      selectedCells.forEach(pos => {
+        setCellStyle(pos.row, pos.col, {});
+      });
+    }},
   ];
 
   const isBold = fontWeight === 'bold';
@@ -353,13 +380,7 @@ const Toolbar: React.FC = () => {
           >
             {availableFormats.map(format => (
               <option key={format} value={format}>
-                {format === 'general' ? 'General' : 
-                 format === 'decimal2' ? '0.00' :
-                 format === 'decimal3' ? '0.000' :
-                 format === 'decimal4' ? '0.0000' :
-                 format === 'currency' ? '$#,##0.00' :
-                 format === 'percentage' ? '0%' :
-                 format}
+                {formatDisplayNames[format] || format}
               </option>
             ))}
           </select>
@@ -388,7 +409,7 @@ const Toolbar: React.FC = () => {
         {/* Text Styling */}
         <button
           className={`p-1.5 rounded ${isBold ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
-          onClick={() => toggleStyle('fontWeight', 'bold')}
+          onClick={() => toggleStyle('fontWeight', 'bold', 'normal')}
           disabled={!hasSelection}
           title="Bold"
         >
@@ -396,7 +417,7 @@ const Toolbar: React.FC = () => {
         </button>
         <button
           className={`p-1.5 rounded ${isItalic ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
-          onClick={() => toggleStyle('fontStyle', 'italic')}
+          onClick={() => toggleStyle('fontStyle', 'italic', 'normal')}
           disabled={!hasSelection}
           title="Italic"
         >
@@ -404,7 +425,7 @@ const Toolbar: React.FC = () => {
         </button>
         <button
           className={`p-1.5 rounded ${isUnderline ? 'bg-gray-300' : 'hover:bg-gray-200'}`}
-          onClick={() => toggleStyle('textDecoration', 'underline')}
+          onClick={() => toggleStyle('textDecoration', 'underline', 'none')}
           disabled={!hasSelection}
           title="Underline"
         >
@@ -414,29 +435,29 @@ const Toolbar: React.FC = () => {
         <div className="w-px h-6 bg-gray-300 mx-1" />
 
         {/* Text Color */}
-        <div className="relative group">
-          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!hasSelection} title="Text Color">
+        <div className="relative">
+          <label className="p-1.5 hover:bg-gray-200 rounded cursor-pointer flex items-center" title="Text Color">
             <TypeIcon size={18} />
-          </button>
-          <input
-            type="color"
-            className="absolute opacity-0 w-8 h-8 cursor-pointer"
-            onChange={(e) => setTextColor(e.target.value)}
-            disabled={!hasSelection}
-          />
+            <input
+              type="color"
+              className="absolute opacity-0 w-0 h-0"
+              onChange={(e) => setTextColor(e.target.value)}
+              disabled={!hasSelection}
+            />
+          </label>
         </div>
 
         {/* Background Color */}
-        <div className="relative group">
-          <button className="p-1.5 hover:bg-gray-200 rounded" disabled={!hasSelection} title="Fill Color">
+        <div className="relative">
+          <label className="p-1.5 hover:bg-gray-200 rounded cursor-pointer flex items-center" title="Fill Color">
             <Palette size={18} />
-          </button>
-          <input
-            type="color"
-            className="absolute opacity-0 w-8 h-8 cursor-pointer"
-            onChange={(e) => setBackgroundColor(e.target.value)}
-            disabled={!hasSelection}
-          />
+            <input
+              type="color"
+              className="absolute opacity-0 w-0 h-0"
+              onChange={(e) => setBackgroundColor(e.target.value)}
+              disabled={!hasSelection}
+            />
+          </label>
         </div>
 
         <div className="w-px h-6 bg-gray-300 mx-1" />
