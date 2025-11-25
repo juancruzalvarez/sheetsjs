@@ -1,5 +1,5 @@
 import { useSpreadsheetStore } from "../Stores/spreadsheetStore";
-import { kDefaultColWidth, kDefaultRowHeight } from "../constants";
+import { kDefaultColWidth, kDefaultRowHeight, kFormulaDependencyColors } from "../constants";
 
 interface OverlayProps {
   cumulativeRowHeights: number[];
@@ -14,8 +14,7 @@ export const Overlay: React.FC<OverlayProps> = ({
   const columnWidths = useSpreadsheetStore((state) => state.columnWidths);
   const rowHeights = useSpreadsheetStore((state) => state.rowHeights);
   const selectionRanges = useSpreadsheetStore((state) => state.selectionRanges);
-  console.log('SELECTED:', selectedCell);
-
+  const formulaReferences = useSpreadsheetStore((state) => state.formulaReferences);
   return (
     <>
       {selectedCell && (
@@ -32,9 +31,10 @@ export const Overlay: React.FC<OverlayProps> = ({
           <div className="w-full h-full bg-blue-400 opacity-25 pointer-events-none" />
         </div>
       )}
-      {
-      selectionRanges.map((range) => (
+      
+      {selectionRanges.map((range, idx) => (
         <div
+          key={`selection-${idx}`}
           className="absolute border-2 border-blue-400 pointer-events-none"
           style={{
             pointerEvents: "none",
@@ -50,8 +50,27 @@ export const Overlay: React.FC<OverlayProps> = ({
         >
           <div className="w-full h-full bg-blue-400 opacity-25 pointer-events-none" />
         </div>
-      ))
-      }
+      ))}
+      
+      {formulaReferences.map((range, idx) => (
+        <div
+          key={`formula-ref-${idx}`}
+          className="absolute pointer-events-none"
+          style={{
+            pointerEvents: "none",
+            left: cumulativeColWidths[range.start.col],
+            top: cumulativeRowHeights[range.start.row],
+            height:
+              cumulativeRowHeights[range.end.row + 1] -
+              cumulativeRowHeights[range.start.row],
+            width:
+              cumulativeColWidths[range.end.col + 1] -
+              cumulativeColWidths[range.start.col],
+            border: `3px dashed ${kFormulaDependencyColors[idx]}`,
+            zIndex: 5,
+          }}
+        />
+      ))}
     </>
   );
 };

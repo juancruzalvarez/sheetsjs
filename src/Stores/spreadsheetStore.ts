@@ -13,7 +13,7 @@ import {
   formatCellValue,
   parseFormulaDependencies,
   cellRefToPosition,
-  positionToCellRef,
+  getFormulaReferences,
 } from "../Services/utils";
 import {
   Cell,
@@ -40,6 +40,8 @@ export interface SpreadsheetStore {
 
   // Dependency graph
   dependencyGraph: Map<string, Set<string>>;
+  formulaReferences: SelectionRange[];
+  editingState: {cell: CellPos, value: string} | null;
 
   // Actions
   setCell: (row: number, col: number, value: any) => void;
@@ -60,6 +62,9 @@ export interface SpreadsheetStore {
   clearSelection: () => void;
   isCellSelected: (row: number, col: number) => boolean;
 
+  setEditingState: (row: number, col: number, value: string) => void;
+  stopEditing: () => void;
+  isEditingFormula: () => boolean;
 }
 
 export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
@@ -88,7 +93,23 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     currentCell: undefined,
 
     dependencyGraph: new Map(),
+    formulaReferences: [{start: {row:2 ,col:2}, end: {row:3, col:5}}],
+    editingState: null,
+    
+    isEditingFormula: () => {
+      let editState = get().editingState;
+      return editState && editState.value.trimStart().startsWith("=");
+    },
+    setEditingState: (row, col, value) => {
 
+      set ({
+        editingState: {cell: {row, col}, value},
+        formulaReferences:value.trimStart().startsWith("=")? getFormulaReferences(value): []
+      });
+    },
+    stopEditing: () => {
+      set ({editingState: null, formulaReferences: []})
+    },
     setCell: (row, col, value) => {
       const key = `${row}-${col}`;
       const existing = get().cells.get(key) || createDefaultCell();

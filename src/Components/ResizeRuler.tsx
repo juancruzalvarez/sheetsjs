@@ -10,8 +10,6 @@ interface ResizeRulerProps {
 export const ResizeRuler: React.FC<ResizeRulerProps> = ({ size }) => {
   const pos = useSpreadsheetStore((state) => state.resizeRulerPos);
   
-  console.log("ResizeRuler rendered at", size);
-
   return (
     <>
       {pos.x != null && (

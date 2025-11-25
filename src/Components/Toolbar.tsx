@@ -116,6 +116,8 @@ const Toolbar: React.FC = () => {
   const setCellStyle = useSpreadsheetStore((state) => state.setCellStyle);
   const setCellDataType = useSpreadsheetStore((state) => state.setCellDataType);
   const setCellFormatting = useSpreadsheetStore((state) => state.setCellFormatting);
+  const setEditingState = useSpreadsheetStore((state) => state.setEditingState);
+  const stopEdit= useSpreadsheetStore((state) => state.stopEditing);
 
   // Get all selected cell positions
   const getSelectedCells = () => {
@@ -579,8 +581,9 @@ const Toolbar: React.FC = () => {
           <input
             type="text"
             value={formulaBarValue}
-            onChange={(e) => handleFormulaBarChange(e.target.value)}
-            onBlur={handleFormulaBarBlur}
+            onChange={(e) => {handleFormulaBarChange(e.target.value); setEditingState(currentCell?.col || 0, currentCell?.row || 0, e.target.value)}}
+              onFocus={() => setEditingState(currentCell?.col || 0, currentCell?.row || 0, formulaBarValue)}
+            onBlur={() => {handleFormulaBarBlur(); stopEdit();}}
             onKeyDown={handleFormulaBarKeyDown}
             placeholder="Enter value or formula"
             disabled={!currentCell}

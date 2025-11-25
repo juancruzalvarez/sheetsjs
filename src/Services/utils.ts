@@ -1,4 +1,4 @@
-import { Cell, DataType, Format } from "./types";
+import { Cell, CellPos, DataType, Format, SelectionRange } from "./types";
 
 export const createDefaultCell = (): Cell => ({
   dataType: "undefined",
@@ -11,7 +11,6 @@ export const createDefaultCell = (): Cell => ({
   error: null,
   style: {},
 });
-
 // Auto-detect data type from raw value
 export const detectDataType = (value: any): DataType => {
   if (value === null) return "null";
@@ -29,7 +28,6 @@ export const detectDataType = (value: any): DataType => {
   
   return "undefined";
 };
-
 // Validate if value matches expected type
 export const validateType = (value: any, expectedType: DataType): boolean => {
   const actualType = detectDataType(value);
@@ -49,7 +47,6 @@ export const validateType = (value: any, expectedType: DataType): boolean => {
   
   return actualType === expectedType;
 };
-
 // Format value based on data type and format
 export const formatCellValue = (cell: Cell): string => {
   const { rawValue, dataType, formatting } = cell;
@@ -81,7 +78,6 @@ export const formatCellValue = (cell: Cell): string => {
     return String(rawValue);
   }
 };
-
 // Format number based on format type
 const formatNumber = (value: number, format: Format): string => {
   switch (format) {
@@ -119,7 +115,6 @@ const formatNumber = (value: number, format: Format): string => {
       return value.toString();
   }
 };
-
 // Format date based on format type
 const formatDate = (value: Date | string, format: Format): string => {
   const date = value instanceof Date ? value : new Date(value);
@@ -160,7 +155,6 @@ const formatDate = (value: Date | string, format: Format): string => {
   }
 };
 
-// Parse formula dependencies: supports cell('a1'), cell("A2:B5"), case insensitive.
 export const parseFormulaDependencies = (formula: string): string[] => {
   const deps: string[] = [];
 
@@ -194,57 +188,54 @@ export const parseFormulaDependencies = (formula: string): string[] => {
 
   return deps;
 };
-
 // Convert column letters → number (A=1, B=2, Z=26, AA=27, AB=28...)
 function colToIndex(col: string): number {
   let idx = 0;
-  for (let i = 0; i < col.length; i++) {
-    idx = idx * 26 + (col.charCodeAt(i) - 64); // 'A' = 65
+  const s = col.toUpperCase();
+  for (let i = 0; i < s.length; i++) {
+    idx = idx * 26 + (s.charCodeAt(i) - 64); // 'A' = 65
   }
-  return idx;
+  return idx; // 1-based
 }
 
 // Convert number → column letters (1=A, 2=B, 27=AA...)
 function indexToCol(idx: number): string {
+  if (idx <= 0) throw new Error("indexToCol: index must be >= 1");
   let col = "";
-  while (idx > 0) {
-    const rem = (idx - 1) % 26;
+  let n = idx;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
     col = String.fromCharCode(65 + rem) + col;
-    idx = Math.floor((idx - 1) / 26);
+    n = Math.floor((n - 1) / 26);
   }
   return col;
 }
 
-// Convert cell reference like "A1" to {row, col}
+// Convert cell reference like "A1" to { row: number; col: number } (both 1-based)
 export const cellRefToPosition = (ref: string): { row: number; col: number } | null => {
-  const match = ref.match(/^([A-Z]+)(\d+)$/);
+  if (!ref) return null;
+  const clean = ref.trim().toUpperCase();
+  const match = clean.match(/^([A-Z]+)(\d+)$/);
   if (!match) return null;
-  
+
   const colLetters = match[1];
-  const row = parseInt(match[2]) - 1;
-  
-  let col = 0;
-  for (let i = 0; i < colLetters.length; i++) {
-    col = col * 26 + (colLetters.charCodeAt(i) - 64);
-  }
-  col -= 1;
-  
+  const rowNumber = parseInt(match[2], 10);
+
+  if (rowNumber <= 0) return null;
+
+  const col = colToIndex(colLetters); // 1-based
+  const row = rowNumber; // 1-based
+
   return { row, col };
 };
 
-// Convert {row, col} to cell reference like "A1"
+// Convert { row: number; col: number } (both 1-based) to cell reference like "A1"
 export const positionToCellRef = (row: number, col: number): string => {
-  let colName = '';
-  let colNum = col + 1;
-  
-  while (colNum > 0) {
-    colNum--;
-    colName = String.fromCharCode(65 + (colNum % 26)) + colName;
-    colNum = Math.floor(colNum / 26);
-  }
-  
-  return `${colName}${row + 1}`;
+  if (row <= 0 || col <= 0) throw new Error("positionToCellRef: row and col must be >= 1");
+  const colName = indexToCol(col);
+  return `${colName}${row}`;
 };
+
 
 // Get available format options for a data type
 export const getFormatOptionsForType = (dataType: DataType): Format[] => {
@@ -286,4 +277,59 @@ export const getFormatOptionsForType = (dataType: DataType): Format[] => {
     default:
       return ["general"];
   }
+};
+
+// Function to extract all cell references from a formula
+export const getFormulaReferences = (formula: string): SelectionRange[] => {
+  if (!formula || !formula.startsWith('=')) return [];
+  
+  const ranges: SelectionRange[] = [];
+  
+  // Match patterns: cell("A1"), cell("A1:B5"), or raw A1, B2:C3
+  // Pattern 1: cell("A1") or cell("A1:B5")
+  const cellFuncPattern = /cell\s*\(\s*["']([A-Z]+\d+(?::[A-Z]+\d+)?)["']\s*\)/gi;
+  
+  // Pattern 2: Raw cell references (after operators or at start, not inside words)
+  const rawCellPattern = /(?:^|[^\w])([A-Z]+\d+(?::[A-Z]+\d+)?)(?=[^\w]|$)/gi;
+  
+  const matches = new Set<string>();
+  
+  // Find all cell function matches
+  let match;
+  while ((match = cellFuncPattern.exec(formula)) !== null) {
+    matches.add(match[1].toUpperCase());
+  }
+  
+  // Find all raw cell references
+  while ((match = rawCellPattern.exec(formula)) !== null) {
+    matches.add(match[1].toUpperCase());
+  }
+  
+  // Convert to SelectionRange objects
+  matches.forEach(ref => {
+    if (ref.includes(':')) {
+      // Range like "A1:B5"
+      const [start, end] = ref.split(':');
+      const startPos = cellRefToPosition(start);
+      const endPos = cellRefToPosition(end);
+      
+      if (startPos && endPos) {
+        ranges.push({
+          start: startPos,
+          end: endPos
+        });
+      }
+    } else {
+      // Single cell like "A1"
+      const pos = cellRefToPosition(ref);
+      if (pos) {
+        ranges.push({
+          start: pos,
+          end: pos
+        });
+      }
+    }
+  });
+  
+  return ranges;
 };

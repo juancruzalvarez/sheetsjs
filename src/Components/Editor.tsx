@@ -191,6 +191,9 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
   const resizeRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
+  const setEditingState = useSpreadsheetStore((state) => state.setEditingState);
+  const stopEdit = useSpreadsheetStore((state) => state.stopEditing);
+
   /* Handle cell switching */
   useEffect(() => {
     const newVal =
@@ -429,7 +432,9 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
             value={code}
             height="100%"
             extensions={[javascript()]}
-            onChange={(value) => setCode(value)}
+            onChange={(value) => {setCode(value); setEditingState(currentCell?.row || 0, currentCell?.col || 0, value)}}
+            onFocus={() => setEditingState(currentCell?.row || 0, currentCell?.col || 0, code)}
+            onBlur={() => stopEdit()}
             theme="light"
             basicSetup={{
               lineNumbers: true,
