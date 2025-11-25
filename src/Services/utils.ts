@@ -287,5 +287,3 @@ export const getFormatOptionsForType = (dataType: DataType): Format[] => {
       return ["general"];
   }
 };
-
-

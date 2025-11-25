@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useCallback, useEffect } from 'react';
 import { useSpreadsheetStore } from '../Stores/spreadsheetStore';
 
 interface CellProps {
@@ -12,7 +12,7 @@ interface CellProps {
 
 const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
   const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState("");
+  const [editValue, setEditValue] = useState('');
 
   const cells = useSpreadsheetStore((state) => state.cells);
   const setCell = useSpreadsheetStore((state) => state.setCell);
@@ -20,14 +20,12 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
   const startSelection = useSpreadsheetStore((state) => state.startSelection);
   const endSelection = useSpreadsheetStore((state) => state.endSelection);
   const isSelecting = useSpreadsheetStore((state) => state.isSelecting);
-  const inputRef = useRef<HTMLInputElement>(null);
-
 
   const key = `${row}-${col}`;
   const cellData = cells.get(key);
 
   // ALWAYS show displayValue (the formatted/calculated result)
-  const displayValue = cellData?.displayValue || "";
+  const displayValue = cellData?.displayValue || '';
   const hasError = cellData?.error !== null && cellData?.error !== undefined;
 
   const handleChange = useCallback((newValue: string) => {
@@ -39,21 +37,33 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
     setCell(row, col, editValue);
     setEditing(false);
   }, [row, col, editValue, setCell]);
-  
-const startEdit = useCallback(() => {
+
+  const startEdit = useCallback(() => {
     setEditing(true);
+    // EDIT THE SOURCE: formula if exists, otherwise rawValue
     const sourceValue = cellData?.formula || cellData?.rawValue?.toString() || '';
     setEditValue(sourceValue);
-    
-  }, [cellData, row, col]);
+  }, [cellData]);
 
   const stopEdit = useCallback(() => {
     handleCommit();
   }, [handleCommit]);
 
+  useEffect(() => {
+    const handleStartEdit = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail.row === row && customEvent.detail.col === col) {
+        startEdit();
+      }
+    };
+
+    window.addEventListener('startCellEdit', handleStartEdit);
+    return () => window.removeEventListener('startCellEdit', handleStartEdit);
+  }, [row, col, startEdit]);
+
   const onMouseDown = (e: React.MouseEvent) => {
     if (editing) return;
-
+    
     const cell = { row: row, col: col };
     if (e.shiftKey) {
       extendSelection(cell);
@@ -75,24 +85,22 @@ const startEdit = useCallback(() => {
     }
   };
 
-  const errorStyle = hasError
-    ? {
-        backgroundColor: "#fee",
-        color: "#c00",
-      }
-    : {};
+  const errorStyle = hasError ? {
+    backgroundColor: '#fee',
+    color: '#c00',
+  } : {};
 
   return (
     <div
       className={`absolute flex items-center px-2 text-sm border border-gray-200 select-none ${
-        hasError ? "border-red-400" : ""
+        hasError ? 'border-red-400' : ''
       }`}
       onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
       onMouseEnter={onMouseEnter}
       onDoubleClick={startEdit}
       style={{
-        position: "absolute",
+        position: 'absolute',
         top,
         left,
         height: `${height}px`,
@@ -104,12 +112,9 @@ const startEdit = useCallback(() => {
     >
       {editing ? (
         <input
-          ref={inputRef}
           className="w-full h-full bg-transparent outline-none text-inherit"
           value={editValue}
-          onChange={(e) => {
-            handleChange(e.target.value);
-          }}
+          onChange={(e) => handleChange(e.target.value)}
           onBlur={stopEdit}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -120,6 +125,7 @@ const startEdit = useCallback(() => {
               setEditValue(cellData?.formula || cellData?.rawValue?.toString() || '');
               setEditing(false);
             }
+            // Don't open editor on = anymore, that's confusing
           }}
           autoFocus
         />
@@ -130,5 +136,5 @@ const startEdit = useCallback(() => {
   );
 });
 
-Cell.displayName = "Cell";
+Cell.displayName = 'Cell';
 export default Cell;

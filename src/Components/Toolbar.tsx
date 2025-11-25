@@ -203,11 +203,13 @@ const Toolbar: React.FC = () => {
 
   // Commit changes when cell selection changes
   useEffect(() => {
-    if (previousCellRef.current) {
+    if (previousCellRef.current && isEditingFormulaBar) {
       // Commit the previous cell's changes
       setCell(previousCellRef.current.row, previousCellRef.current.col, formulaBarValue);
+      setIsEditingFormulaBar(false);
     }
-
+    
+    // Update to new cell
     previousCellRef.current = currentCell;
     if (!isEditingFormulaBar) {
       setFormulaBarValue(cellValue);
@@ -220,8 +222,9 @@ const Toolbar: React.FC = () => {
   };
 
   const handleFormulaBarBlur = () => {
-    if (currentCell) {
+    if (currentCell && isEditingFormulaBar) {
       setCell(currentCell.row, currentCell.col, formulaBarValue);
+      setIsEditingFormulaBar(false);
     }
   };
 
@@ -230,10 +233,12 @@ const Toolbar: React.FC = () => {
       e.preventDefault();
       if (currentCell) {
         setCell(currentCell.row, currentCell.col, formulaBarValue);
+        setIsEditingFormulaBar(false);
       }
     }
     if (e.key === 'Escape') {
       setFormulaBarValue(cellValue);
+      setIsEditingFormulaBar(false);
     }
   };
 
