@@ -425,6 +425,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
     startSelection: (cell, ctrlKey = false) =>
       set((state) => {
+            // Normal selection
         const range: SelectionRange = { start: cell, end: cell };
         return {
           isSelecting: true,
@@ -435,11 +436,14 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         };
       }),
 
+    // UPDATE extendSelection for ranges
     extendSelection: (cell) => {
-      const ranges = get().selectionRanges;
+      const state = get();
+      // Normal extend behavior
+      const ranges = state.selectionRanges;
       if (!ranges.length) return;
 
-      const currentCell = get().currentCell;
+      const currentCell = state.currentCell;
       let start = { col: 0, row: 0 };
       let end = { col: 0, row: 0 };
       if (currentCell) {

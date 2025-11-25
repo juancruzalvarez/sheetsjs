@@ -1,10 +1,18 @@
-import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
-import Cell from './Cell';
-import { HeaderCellCol, HeaderCellRow } from './Headers';
-import { useSpreadsheetStore } from '../Stores/spreadsheetStore';
-import { kBuffer, kDefaultColWidth, kDefaultRowHeight } from '../constants';
-import { ResizeRuler } from './ResizeRuler';
-import { Overlay } from './Overlay';
+import React, {
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  useState,
+  KeyboardEvent,
+} from "react";
+import Cell from "./Cell";
+import { HeaderCellCol, HeaderCellRow } from "./Headers";
+import { useSpreadsheetStore } from "../Stores/spreadsheetStore";
+import { kBuffer, kDefaultColWidth, kDefaultRowHeight } from "../constants";
+import { ResizeRuler } from "./ResizeRuler";
+import { Overlay } from "./Overlay";
+import { useKeyboard } from "../Hooks/useKeyboard";
 
 interface ContainerDims {
   height: number;
@@ -19,15 +27,16 @@ interface Scroll {
 const Spreadsheet: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState<Scroll>({ top: 0, left: 0 });
-  const [containerDims, setContainerDims] = useState<ContainerDims>({ 
-    height: 600, 
-    width: 800 
+  const [containerDims, setContainerDims] = useState<ContainerDims>({
+    height: 600,
+    width: 800,
   });
-  
-  const columnCount = useSpreadsheetStore(state => state.columnCount);
-  const rowCount = useSpreadsheetStore(state => state.rowCount);
-  const columnWidths = useSpreadsheetStore(state => state.columnWidths);
-  const rowHeights = useSpreadsheetStore(state => state.rowHeights);
+
+  const columnCount = useSpreadsheetStore((state) => state.columnCount);
+  const rowCount = useSpreadsheetStore((state) => state.rowCount);
+  const columnWidths = useSpreadsheetStore((state) => state.columnWidths);
+  const rowHeights = useSpreadsheetStore((state) => state.rowHeights);
+
 
   // Dynamic container dimensions (update on resize)
   useEffect(() => {
@@ -40,8 +49,8 @@ const Spreadsheet: React.FC = () => {
         width: current.clientWidth,
       });
     };
-    
-    updateDims(); 
+
+    updateDims();
     const resizeObserver = new ResizeObserver(updateDims);
     resizeObserver.observe(current);
 
@@ -65,19 +74,92 @@ const Spreadsheet: React.FC = () => {
           ticking = false;
         });
         ticking = true;
-      } 
+      }
     };
 
-    current.addEventListener('scroll', handleScroll);
+    current.addEventListener("scroll", handleScroll);
     return () => {
-      current.removeEventListener('scroll', handleScroll);
+      current.removeEventListener("scroll", handleScroll);
     };
   }, []);
+
+   useKeyboard({
+    moveUp: () => {
+      const { currentCell, startSelection, rowCount } = useSpreadsheetStore.getState();
+      if (!currentCell) return;
+      const newRow = Math.max(0, currentCell.row - 1);
+      startSelection({ row: newRow, col: currentCell.col }, false);
+      useSpreadsheetStore.getState().endSelection();
+    },
+    
+    moveDown: () => {
+      const { currentCell, startSelection, rowCount } = useSpreadsheetStore.getState();
+      if (!currentCell) return;
+      const newRow = Math.min(rowCount - 1, currentCell.row + 1);
+      startSelection({ row: newRow, col: currentCell.col }, false);
+            useSpreadsheetStore.getState().endSelection();
+
+    },
+    
+    moveLeft: () => {
+      const { currentCell, startSelection } = useSpreadsheetStore.getState();
+      if (!currentCell) return;
+      const newCol = Math.max(0, currentCell.col - 1);
+      startSelection({ row: currentCell.row, col: newCol }, false);
+            useSpreadsheetStore.getState().endSelection();
+
+    },
+    
+    moveRight: () => {
+      const { currentCell, startSelection, columnCount } = useSpreadsheetStore.getState();
+      if (!currentCell) return;
+      const newCol = Math.min(columnCount - 1, currentCell.col + 1);
+      startSelection({ row: currentCell.row, col: newCol }, false);
+            useSpreadsheetStore.getState().endSelection();
+
+    },
+    
+    startEdit: () => {
+      const { currentCell } = useSpreadsheetStore.getState();
+      if (!currentCell) return;
+      // TODO:: probly no the best way to do this, as each cell has to handle this event. but its once every so often
+      // so maybe its not that bad.
+      
+      window.dispatchEvent(new CustomEvent('startCellEdit', {
+        detail: { row: currentCell.row, col: currentCell.col }
+      }));
+    },
+    
+    delete: () => {
+      const { selectionRanges, setCell } = useSpreadsheetStore.getState();
+      
+      // Delete all selected cells
+      selectionRanges.forEach(range => {
+        const startRow = Math.min(range.start.row, range.end.row);
+        const endRow = Math.max(range.start.row, range.end.row);
+        const startCol = Math.min(range.start.col, range.end.col);
+        const endCol = Math.max(range.start.col, range.end.col);
+        
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            setCell(r, c, '');
+          }
+        }
+      });
+    },
+    
+    copy: () => console.log('Copy'),
+    cut: () => console.log('Cut'),
+    paste: () => console.log('Paste'),
+    undo: () => console.log('Undo'),
+    redo: () => console.log('Redo'),
+  });
 
   const cumulativeRowHeights = useMemo(() => {
     const cumulative = [0];
     for (let i = 0; i < rowCount; i++) {
-      cumulative[i + 1] = cumulative[i] + (rowHeights.get(i) ?? kDefaultRowHeight);
+      cumulative[i + 1] =
+        cumulative[i] + (rowHeights.get(i) ?? kDefaultRowHeight);
     }
     return cumulative;
   }, [rowCount, rowHeights]);
@@ -85,7 +167,8 @@ const Spreadsheet: React.FC = () => {
   const cumulativeColWidths = useMemo(() => {
     const cumulative = [0];
     for (let i = 0; i < columnCount; i++) {
-      cumulative[i + 1] = cumulative[i] + (columnWidths.get(i) ?? kDefaultColWidth);
+      cumulative[i + 1] =
+        cumulative[i] + (columnWidths.get(i) ?? kDefaultColWidth);
     }
     return cumulative;
   }, [columnCount, columnWidths]);
@@ -117,7 +200,13 @@ const Spreadsheet: React.FC = () => {
       }
     }
     return Math.min(rowCount, end + kBuffer);
-  }, [visibleRowStart, scroll.top, containerHeight, cumulativeRowHeights, rowCount]);
+  }, [
+    visibleRowStart,
+    scroll.top,
+    containerHeight,
+    cumulativeRowHeights,
+    rowCount,
+  ]);
 
   const visibleColStart = useMemo(() => {
     let start = 0;
@@ -141,7 +230,13 @@ const Spreadsheet: React.FC = () => {
       }
     }
     return Math.min(columnCount, end + kBuffer);
-  }, [visibleColStart, scroll.left, containerWidth, cumulativeColWidths, columnCount]);
+  }, [
+    visibleColStart,
+    scroll.left,
+    containerWidth,
+    cumulativeColWidths,
+    columnCount,
+  ]);
 
   // Render visible cells
   const visibleCells = useMemo(() => {
@@ -182,12 +277,20 @@ const Spreadsheet: React.FC = () => {
   ]);
 
   const visibleCols = useMemo(
-    () => Array.from({ length: visibleColEnd - visibleColStart }, (_, i) => i + visibleColStart),
+    () =>
+      Array.from(
+        { length: visibleColEnd - visibleColStart },
+        (_, i) => i + visibleColStart
+      ),
     [visibleColStart, visibleColEnd]
   );
-  
+
   const visibleRows = useMemo(
-    () => Array.from({ length: visibleRowEnd - visibleRowStart }, (_, i) => i + visibleRowStart),
+    () =>
+      Array.from(
+        { length: visibleRowEnd - visibleRowStart },
+        (_, i) => i + visibleRowStart
+      ),
     [visibleRowStart, visibleRowEnd]
   );
 
@@ -195,41 +298,44 @@ const Spreadsheet: React.FC = () => {
   const fixedHeight = rowHeights.get(0) ?? 40;
 
   return (
-    <div ref={containerRef} className="relative flex-1 overflow-scroll bg-white border border-gray-200">
+    <div
+      ref={containerRef}
+      className="relative flex-1 overflow-scroll bg-white border border-gray-200"
+    >
       <ResizeRuler size={{ x: totalWidth, y: totalHeight }} />
 
       {/* Scroll spacer: Enables native scrolling as if full grid exists */}
-      <div style={{ 
-        position: 'absolute', 
-        inset: 0, 
-        width: totalWidth, 
-        height: totalHeight, 
-        pointerEvents: 'none',
-      }} />
-      
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: totalWidth,
+          height: totalHeight,
+          pointerEvents: "none",
+        }}
+      />
+
       {visibleCells}
-      
-      <Overlay 
-        cumulativeColWidths={cumulativeColWidths} 
+
+      <Overlay
+        cumulativeColWidths={cumulativeColWidths}
         cumulativeRowHeights={cumulativeRowHeights}
       />
-      
-      <div 
+
+      <div
         className="sticky  bg-white border-r border-b"
-        style={{ 
+        style={{
           top: 0,
           left: 0,
-          width: fixedWidth, 
+          width: fixedWidth,
           height: fixedHeight,
-          zIndex: 50
+          zIndex: 50,
         }}
-      >
-        
-      </div>
-      
-      <div 
+      ></div>
+
+      <div
         className="sticky bg-white"
-        style={{ 
+        style={{
           top: 0,
           height: fixedHeight,
           zIndex: 40,
@@ -251,9 +357,9 @@ const Spreadsheet: React.FC = () => {
         ))}
       </div>
 
-      <div 
+      <div
         className="sticky bg-white"
-        style={{ 
+        style={{
           left: 0,
           width: fixedWidth,
           zIndex: 30,
