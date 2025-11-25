@@ -1,6 +1,5 @@
-import React, { memo, useState, useCallback, useEffect, useRef } from "react";
-import { useSpreadsheetStore } from "../Stores/spreadsheetStore";
-import { insertCellReference } from "../Services/utils";
+import React, { memo, useState, useCallback } from 'react';
+import { useSpreadsheetStore } from '../Stores/spreadsheetStore';
 
 interface CellProps {
   row: number;
@@ -51,19 +50,6 @@ const startEdit = useCallback(() => {
   const stopEdit = useCallback(() => {
     handleCommit();
   }, [handleCommit]);
-
-  
-  useEffect(() => {
-    const handleStartEdit = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail.row === row && customEvent.detail.col === col) {
-        startEdit();
-      }
-    };
-
-    window.addEventListener("startCellEdit", handleStartEdit);
-    return () => window.removeEventListener("startCellEdit", handleStartEdit);
-  }, [row, col, startEdit]);
 
   const onMouseDown = (e: React.MouseEvent) => {
     if (editing) return;

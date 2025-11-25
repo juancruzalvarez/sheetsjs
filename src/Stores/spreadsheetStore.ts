@@ -59,6 +59,7 @@ export interface SpreadsheetStore {
   endSelection: () => void;
   clearSelection: () => void;
   isCellSelected: (row: number, col: number) => boolean;
+
 }
 
 export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
@@ -476,5 +477,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         return row >= top && row <= bottom && col >= left && col <= right;
       });
     },
+
   };
+
 });
