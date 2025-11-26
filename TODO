@@ -2,6 +2,9 @@
 -should change cell to subscribe to part of state only, not whole cells array.
 maybe it does not affect performance because memo, but should check.
 -add behaviour for selecting while editing a formula to automatically add cell references.
+-add behaviour so paste updates cell references.
+-add functionality for dragging ranges down (with updated cell references).
+-maybe give sintax for making references absoulte. ( not updated on dragging and pasting.)
 -add macro editor
 -add serialization
 -considerate adding exporting to other formats. probly not very feasible at least with formulas. but inspect posibility-.
