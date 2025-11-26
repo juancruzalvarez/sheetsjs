@@ -148,9 +148,20 @@ const Spreadsheet: React.FC = () => {
       });
     },
     
-    copy: () => console.log('Copy'),
-    cut: () => console.log('Cut'),
-    paste: () => console.log('Paste'),
+    copy: () => {
+      const { copySelection } = useSpreadsheetStore.getState();
+      copySelection();
+    },
+    
+    cut: () => {
+      const { cutSelection } = useSpreadsheetStore.getState();
+      cutSelection();
+    },
+    
+    paste: () => {
+      const { paste } = useSpreadsheetStore.getState();
+      paste();
+    },
     undo: () => console.log('Undo'),
     redo: () => console.log('Redo'),
   });

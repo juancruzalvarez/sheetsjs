@@ -57,3 +57,23 @@ export interface SelectionRange {
   start: CellPos;
   end: CellPos;
 }
+
+
+export interface ClipboardData {
+  cells: Array<Array<{
+    rawValue: any;
+    formula: string | null;
+    style: CSSProperties;
+    formatting: Format;
+    dataType: DataType;
+  }>>;
+  rowCount: number;
+  colCount: number;
+  isCut: boolean;
+  sourceRange: {
+    startRow: number;
+    endRow: number;
+    startCol: number;
+    endCol: number;
+  } | null;
+}

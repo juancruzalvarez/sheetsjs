@@ -18,6 +18,7 @@ import {
 import {
   Cell,
   CellPos,
+  ClipboardData,
   DataType,
   Format,
   SelectionRange,
@@ -43,7 +44,13 @@ export interface SpreadsheetStore {
   formulaReferences: SelectionRange[];
   editingState: {cell: CellPos, value: string} | null;
 
+  clipboard: ClipboardData | null;
+  
   // Actions
+  copySelection: () => void;
+  cutSelection: () => void;
+  paste: () => void;
+
   setCell: (row: number, col: number, value: any) => void;
   setCellFormula: (row: number, col: number, formula: string) => void;
   setCellStyle: (row: number, col: number, style: CSSProperties) => void;
@@ -100,6 +107,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       let editState = get().editingState;
       return editState && editState.value.trimStart().startsWith("=");
     },
+
     setEditingState: (row, col, value) => {
 
       set ({
@@ -107,9 +115,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         formulaReferences:value.trimStart().startsWith("=")? getFormulaReferences(value): []
       });
     },
+
     stopEditing: () => {
       set ({editingState: null, formulaReferences: []})
     },
+
     setCell: (row, col, value) => {
       const key = `${row}-${col}`;
       const existing = get().cells.get(key) || createDefaultCell();
@@ -170,10 +180,8 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         set((state) => ({
           cells: new Map(state.cells).set(key, updatedCell),
         }));
-
-        // IMPORTANT: Recalculate dependents!
-        get().recalculateDependents(key);
       }
+      get().recalculateDependents(key);
     },
 
     setCellFormula: (row, col, formula) => {
@@ -220,6 +228,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     },
 
     recalculateCell: (row, col) => {
+      console.log('recalculate', ''+row+' ' + col)
       const key = `${row}-${col}`;
       const cell = get().cells.get(key);
 
@@ -359,10 +368,13 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     },
 
     recalculateDependents: (cellKey) => {
+      console.log('recalculateDependants', cellKey)
+
       const graph = get().dependencyGraph;
       const dependents = graph.get(cellKey);
 
       if (!dependents) return;
+      console.log('dependends:!', dependents)
 
       dependents.forEach((depKey) => {
         const [row, col] = depKey.split("-").map(Number);
@@ -494,6 +506,124 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         return row >= top && row <= bottom && col >= left && col <= right;
       });
     },
+    clipboard: null,
+
+  copySelection: () => {
+    const { selectionRanges, cells } = get();
+    if (selectionRanges.length === 0) return;
+
+    // Get first selection range (for simplicity, ignore multi-selection)
+    const range = selectionRanges[0];
+    const startRow = Math.min(range.start.row, range.end.row);
+    const endRow = Math.max(range.start.row, range.end.row);
+    const startCol = Math.min(range.start.col, range.end.col);
+    const endCol = Math.max(range.start.col, range.end.col);
+
+    // Extract cell data
+    const copiedCells: ClipboardData['cells'] = [];
+    
+    for (let r = startRow; r <= endRow; r++) {
+      const row = [];
+      for (let c = startCol; c <= endCol; c++) {
+        const key = `${r}-${c}`;
+        const cell = cells.get(key);
+        
+        row.push({
+          rawValue: cell?.rawValue ?? null,
+          formula: cell?.formula ?? null,
+          style: cell?.style ?? {},
+          formatting: cell?.formatting ?? 'general',
+          dataType: cell?.dataType ?? 'undefined',
+        });
+      }
+      copiedCells.push(row);
+    }
+
+    set({
+      clipboard: {
+        cells: copiedCells,
+        rowCount: endRow - startRow + 1,
+        colCount: endCol - startCol + 1,
+        isCut: false,
+        sourceRange: { startRow, endRow, startCol, endCol },
+      }
+    });
+
+    console.log(`Copied ${copiedCells.length}x${copiedCells[0]?.length || 0} cells`);
+  },
+
+  cutSelection: () => {
+    const { selectionRanges, cells } = get();
+    if (selectionRanges.length === 0) return;
+
+    // Same as copy but mark as cut
+    get().copySelection();
+    
+    set((state) => ({
+      clipboard: state.clipboard ? { ...state.clipboard, isCut: true } : null
+    }));
+
+    console.log('Cut cells (will be cleared on paste)');
+  },
+
+  paste: () => {
+    const { clipboard, currentCell, cells, setCell } = get();
+    if (!clipboard || !currentCell) return;
+
+    const targetRow = currentCell.row;
+    const targetCol = currentCell.col;
+
+    // Paste cells
+    for (let r = 0; r < clipboard.rowCount; r++) {
+      for (let c = 0; c < clipboard.colCount; c++) {
+        const sourceCell = clipboard.cells[r][c];
+        const destRow = targetRow + r;
+        const destCol = targetCol + c;
+
+        // Check bounds
+        if (destRow >= get().rowCount || destCol >= get().columnCount) {
+          continue;
+        }
+
+        // Paste value or formula
+        if (sourceCell.formula) {
+          // TODO:: For formulas, we need to adjust cell references 
+          // For now, just paste the formula as-is
+          setCell(destRow, destCol, sourceCell.formula);
+        } else {
+          setCell(destRow, destCol, sourceCell.rawValue);
+        }
+
+        // Apply formatting and style
+        const key = `${destRow}-${destCol}`;
+        const existingCell = get().cells.get(key);
+        if (existingCell) {
+          set((state) => ({
+            cells: new Map(cells).set(key, {
+              ...existingCell,
+              style: { ...sourceCell.style },
+              formatting: sourceCell.formatting,
+            })
+          }));
+        }
+      }
+    }
+
+    // If cut, clear source cells
+    if (clipboard.isCut && clipboard.sourceRange) {
+      const { startRow, endRow, startCol, endCol } = clipboard.sourceRange;
+      for (let r = startRow; r <= endRow; r++) {
+        for (let c = startCol; c <= endCol; c++) {
+          setCell(r, c, '');
+        }
+      }
+      
+      // Clear clipboard after cut+paste
+      set({ clipboard: null });
+    }
+
+    console.log(`Pasted to ${targetRow},${targetCol}`);
+  },
 
   };
 
