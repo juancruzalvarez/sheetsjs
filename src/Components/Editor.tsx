@@ -15,10 +15,6 @@ import { cellRefToPosition } from "../Services/utils";
 import ReactCodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 
-/* -------------------------------------------------------------
-      Helper Sidebar
--------------------------------------------------------------- */
-
 interface HelperSidebarProps {
   insertExample: (example: string) => void;
 }
@@ -163,9 +159,6 @@ export const HelperSidebar: React.FC<HelperSidebarProps> = ({
   );
 };
 
-/* -------------------------------------------------------------
-      Editor Component with Resizable CodeMirror
--------------------------------------------------------------- */
 
 interface EditorProps {
   onClose: () => void;
@@ -196,8 +189,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
 
   /* Handle cell switching */
   useEffect(() => {
-    const newVal =
-      cellData?.formula || cellData?.rawValue?.toString() || "";
+    const newVal = cellData?.formula || cellData?.rawValue?.toString() || "";
     setCode(newVal);
   }, [cellData, currentCell]);
 
@@ -205,10 +197,10 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return;
-      
+
       // Calculate new width (dragging left = wider)
       const newWidth = window.innerWidth - e.clientX;
-      
+
       // Clamp between 300px and 800px
       const clampedWidth = Math.max(300, Math.min(800, newWidth));
       setEditorWidth(clampedWidth);
@@ -216,23 +208,23 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
 
     const handleMouseUp = () => {
       isResizing.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, []);
 
   const handleMouseDown = () => {
     isResizing.current = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
   };
 
   const getCellReference = () => {
@@ -242,9 +234,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
     return `${col}${row}`;
   };
 
-  /* -------------------------------------------------------------
-        Formula Execution
-  -------------------------------------------------------------- */
+
   const executeFormula = () => {
     if (!currentCell) return;
 
@@ -258,20 +248,20 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
         cell: (ref: string) => {
           // Normalize to uppercase
           ref = ref.toUpperCase();
-          
+
           // Check if it's a range (e.g., "A1:B5")
-          if (ref.includes(':')) {
-            const [start, end] = ref.split(':');
+          if (ref.includes(":")) {
+            const [start, end] = ref.split(":");
             const startPos = cellRefToPosition(start);
             const endPos = cellRefToPosition(end);
-            
+
             if (!startPos || !endPos) return null;
-            
+
             const startRow = Math.min(startPos.row, endPos.row);
             const endRow = Math.max(startPos.row, endPos.row);
             const startCol = Math.min(startPos.col, endPos.col);
             const endCol = Math.max(startPos.col, endPos.col);
-            
+
             // Check if it's a single row (1D horizontal array  )
             if (startRow === endRow) {
               const values = [];
@@ -282,7 +272,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
               }
               return values;
             }
-            
+
             // Check if it's a single column (1D vertical array)
             if (startCol === endCol) {
               const values = [];
@@ -293,7 +283,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
               }
               return values;
             }
-            
+
             // 2D array for multi-row, multi-column range
             const values = [];
             for (let r = startRow; r <= endRow; r++) {
@@ -307,7 +297,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
             }
             return values;
           }
-          
+
           // Single cell reference
           const pos = cellRefToPosition(ref);
           if (!pos) return null;
@@ -317,7 +307,8 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
         },
 
         sum: (...args: number[]) => args.reduce((a, b) => a + b, 0),
-        avg: (...args: number[]) => args.reduce((a, b) => a + b, 0) / args.length,
+        avg: (...args: number[]) =>
+          args.reduce((a, b) => a + b, 0) / args.length,
         max: Math.max,
         min: Math.min,
         round: Math.round,
@@ -357,9 +348,6 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
     }
   };
 
-  /* -------------------------------------------------------------
-        Clipboard
-  -------------------------------------------------------------- */
   const copyCode = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
@@ -369,7 +357,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
   const insertExample = (example: string) => setCode(example);
 
   return (
-    <div 
+    <div
       className="h-full bg-white border-l border-gray-300 flex shadow-xl relative"
       style={{ width: `${editorWidth}px` }}
     >
@@ -422,7 +410,8 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
         {/* Label */}
         <div className="px-4 py-2 bg-gray-100 border-b border-gray-300">
           <div className="text-xs text-gray-600">
-            JavaScript Formula (start with <code className="text-blue-600">=</code>)
+            JavaScript Formula (start with{" "}
+            <code className="text-blue-600">=</code>)
           </div>
         </div>
 
@@ -432,8 +421,27 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
             value={code}
             height="100%"
             extensions={[javascript()]}
-            onChange={(value) => {setCode(value); setEditingState(currentCell?.row || 0, currentCell?.col || 0, value)}}
-            onFocus={() => setEditingState(currentCell?.row || 0, currentCell?.col || 0, code)}
+            onChange={(value) => {
+              setCode(value);
+            }}
+            onUpdate={(v) => {
+              const view = v.view;
+              const cursorPos = view.state.selection.main.head;
+              const value = view.state.doc.toString();
+              setEditingState(
+                currentCell?.row || 0,
+                currentCell?.col || 0,
+                value,
+                cursorPos
+              );
+            }}
+            onFocus={() =>
+              setEditingState(
+                currentCell?.row || 0,
+                currentCell?.col || 0,
+                code, 0
+              )
+            }
             onBlur={() => stopEdit()}
             theme="light"
             basicSetup={{
@@ -455,7 +463,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
         </div>
 
         {/* Execute button */}
-       <div className="px-4 py-3 border-t border-gray-300 bg-gray-100 flex gap-2">
+        <div className="px-4 py-3 border-t border-gray-300 bg-gray-100 flex gap-2">
           <button
             onClick={executeFormula}
             className="flex-5 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -478,7 +486,9 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
         {/* Result */}
         {result && (
           <div className="mx-4 mb-3 p-3 bg-green-100 border border-green-300 rounded-lg">
-            <div className="text-xs text-green-700 font-semibold mb-1">Result:</div>
+            <div className="text-xs text-green-700 font-semibold mb-1">
+              Result:
+            </div>
             <div className="font-mono text-sm text-green-800 break-all">
               {result}
             </div>
@@ -493,7 +503,9 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
               className="text-red-600 flex-shrink-0 mt-0.5"
             />
             <div className="flex-1">
-              <div className="text-xs text-red-600 font-semibold mb-1">Error:</div>
+              <div className="text-xs text-red-600 font-semibold mb-1">
+                Error:
+              </div>
               <div className="text-sm text-red-700 break-words">{error}</div>
             </div>
           </div>

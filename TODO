@@ -1,6 +1,7 @@
 -fix paste bug not updating dependant cells correctly - done
 -should change cell to subscribe to part of state only, not whole cells array.
-maybe it does not affect performance because memo, but should check.
+maybe it does not affect performance because memo, but should check. -done (i dont think it changed anything)
+
 -add behaviour for selecting while editing a formula to automatically add cell references.
 -add behaviour so paste updates cell references.
 -add functionality for dragging ranges down (with updated cell references).

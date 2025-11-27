@@ -42,7 +42,7 @@ export interface SpreadsheetStore {
   // Dependency graph
   dependencyGraph: Map<string, Set<string>>;
   formulaReferences: SelectionRange[];
-  editingState: { cell: CellPos; value: string } | null;
+  editingState: { cell: CellPos; value: string, cursorPos: number } | null;
 
   clipboard: ClipboardData | null;
 
@@ -69,7 +69,7 @@ export interface SpreadsheetStore {
   clearSelection: () => void;
   isCellSelected: (row: number, col: number) => boolean;
 
-  setEditingState: (row: number, col: number, value: string) => void;
+  setEditingState: (row: number, col: number, value: string, cursorPos: number) => void;
   stopEditing: () => void;
   isEditingFormula: () => boolean;
 }
@@ -108,9 +108,10 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       return editState && editState.value.trimStart().startsWith("=");
     },
 
-    setEditingState: (row, col, value) => {
+    setEditingState: (row, col, value, cursorPos) => {
+      console.log('editing state:', { cell: { row, col }, value, cursorPos });
       set({
-        editingState: { cell: { row, col }, value },
+        editingState: { cell: { row, col }, value, cursorPos },
         formulaReferences: value.trimStart().startsWith("=")
           ? getFormulaReferences(value)
           : [],
