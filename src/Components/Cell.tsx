@@ -14,15 +14,15 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
 
-  const cells = useSpreadsheetStore((state) => state.cells);
+  const cellData = useSpreadsheetStore(
+    useCallback((state) => state.cells.get(`${row}-${col}`), [row, col])
+  );
   const setCell = useSpreadsheetStore((state) => state.setCell);
+
   const extendSelection = useSpreadsheetStore((state) => state.extendSelection);
   const startSelection = useSpreadsheetStore((state) => state.startSelection);
   const endSelection = useSpreadsheetStore((state) => state.endSelection);
   const isSelecting = useSpreadsheetStore((state) => state.isSelecting);
-
-  const key = `${row}-${col}`;
-  const cellData = cells.get(key);
 
   // ALWAYS show displayValue (the formatted/calculated result)
   const displayValue = cellData?.displayValue || '';

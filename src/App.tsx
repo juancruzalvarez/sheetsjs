@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Spreadsheet from "./Components/Spreadsheet"
-import Toolbar from "./Components/Toolbar"
+import Toolbar from "./Components/Toolbar/Toolbar"
 import { useSpreadsheetStore } from "./Stores/spreadsheetStore";
 import Editor from "./Components/Editor";
 
