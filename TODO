@@ -1,4 +1,4 @@
--fix past bug not updating dependant cells correctly
+-fix paste bug not updating dependant cells correctly - done
 -should change cell to subscribe to part of state only, not whole cells array.
 maybe it does not affect performance because memo, but should check.
 -add behaviour for selecting while editing a formula to automatically add cell references.
