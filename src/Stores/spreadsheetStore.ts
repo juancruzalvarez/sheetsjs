@@ -23,7 +23,6 @@ import {
   Format,
   SelectionRange,
 } from "../Services/types";
-
 export interface SpreadsheetStore {
   rowCount: number;
   columnCount: number;
@@ -42,7 +41,13 @@ export interface SpreadsheetStore {
   // Dependency graph
   dependencyGraph: Map<string, Set<string>>;
   formulaReferences: SelectionRange[];
-  editingState: { cell: CellPos; value: string, cursorPos: number } | null;
+  editingState: { 
+    cell: CellPos;
+    value: string;
+    cursorPos: number;
+    insertingRange: SelectionRange | null;
+    insertingRangeStart: CellPos | null;
+   } | null;
 
   clipboard: ClipboardData | null;
 
@@ -90,36 +95,44 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     rowCount,
     columnCount,
 
-    cells: new Map(),
+    cells: new Map<string, Cell>(),
     columnWidths,
     rowHeights,
 
     resizeRulerPos: { x: null, y: null },
-    selectionRanges: [],
+    selectionRanges: [] as SelectionRange[],
     isSelecting: false,
     currentCell: undefined,
 
-    dependencyGraph: new Map(),
-    formulaReferences: [{ start: { row: 2, col: 2 }, end: { row: 3, col: 5 } }],
+    dependencyGraph: new Map<string, Set<string>>(),
+    formulaReferences: [] as SelectionRange[],
     editingState: null,
 
     isEditingFormula: () => {
-      let editState = get().editingState;
-      return editState && editState.value.trimStart().startsWith("=");
+      const editState = get().editingState;
+      // ensure boolean always
+      return !!(editState && editState.value.trimStart().startsWith("="));
     },
 
     setEditingState: (row, col, value, cursorPos) => {
-      console.log('editing state:', { cell: { row, col }, value, cursorPos });
-      set({
-        editingState: { cell: { row, col }, value, cursorPos },
-        formulaReferences: value.trimStart().startsWith("=")
-          ? getFormulaReferences(value)
-          : [],
-      });
-    },
+      // compute formula references only when value starts with '='
+      const refs: SelectionRange[] = value.trimStart().startsWith("=")
+        ? (getFormulaReferences(value) as SelectionRange[])
+        : ([] as SelectionRange[]);
 
+      set({
+        editingState: { 
+          cell: { row, col },
+          value,
+          cursorPos,
+          insertingRange: get().editingState?.insertingRange || null,
+          insertingRangeStart: get().editingState?.insertingRangeStart || null
+         },
+        formulaReferences: refs,
+      });
+    },    
     stopEditing: () => {
-      set({ editingState: null, formulaReferences: [] });
+      set({ editingState: null, formulaReferences: [] as SelectionRange[] });
     },
 
     setCell: (row, col, value) => {
@@ -138,9 +151,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
           error: null,
         };
 
-        set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell),
-        }));
+        set((state) => {
+          const newCells = new Map(state.cells);
+          newCells.set(key, updatedCell);
+          return { cells: newCells };
+        });
 
         // IMPORTANT: Recalculate dependents!
         get().recalculateDependents(key);
@@ -157,15 +172,15 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         const detectedType = detectDataType(value);
         const finalType = existing.dataTypeOverride || detectedType;
 
-        let error = null;
+        let error: Cell["error"] = null;
         if (
           existing.dataTypeOverride &&
           !validateType(value, existing.dataTypeOverride)
         ) {
           error = {
             message: `Value doesn't match expected type: ${existing.dataTypeOverride}`,
-            type: "type-mismatch" as const,
-          };
+            type: "type-mismatch",
+          } as NonNullable<Cell["error"]>;
         }
 
         const updatedCell: Cell = {
@@ -179,9 +194,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
         updatedCell.displayValue = formatCellValue(updatedCell);
 
-        set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell),
-        }));
+        set((state) => {
+          const newCells = new Map(state.cells);
+          newCells.set(key, updatedCell);
+          return { cells: newCells };
+        });
       }
       get().recalculateDependents(key);
     },
@@ -190,14 +207,14 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       const key = `${row}-${col}`;
       const existing = get().cells.get(key) || createDefaultCell();
 
-      // Parse dependencies
-      const dependencies = parseFormulaDependencies(formula);
+      // Parse dependencies (ensure typed)
+      const dependencies: string[] = parseFormulaDependencies(formula) || [];
 
       // Update dependency graph
-      const graph = new Map(get().dependencyGraph);
+      const graph = new Map<string, Set<string>>(get().dependencyGraph);
 
-      // Remove old dependencies
-      graph.forEach((deps, depKey) => {
+      // Remove old dependencies (remove this key from all existing sets)
+      graph.forEach((deps) => {
         deps.delete(key);
       });
 
@@ -207,7 +224,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         if (depPos) {
           const depKey = `${depPos.row}-${depPos.col}`;
           if (!graph.has(depKey)) {
-            graph.set(depKey, new Set());
+            graph.set(depKey, new Set<string>());
           }
           graph.get(depKey)!.add(key);
         }
@@ -220,10 +237,14 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         error: null,
       };
 
-      set((state) => ({
-        cells: new Map(state.cells).set(key, updatedCell),
-        dependencyGraph: graph,
-      }));
+      set((state) => {
+        const newCells = new Map(state.cells);
+        newCells.set(key, updatedCell);
+        return {
+          cells: newCells,
+          dependencyGraph: graph,
+        };
+      });
 
       // Recalculate the cell
       get().recalculateCell(row, col);
@@ -260,9 +281,9 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
               const startCol = Math.min(startPos.col, endPos.col);
               const endCol = Math.max(startPos.col, endPos.col);
 
-              // Check if it's a single row (1D horizontal array  )
+              // Check if it's a single row (1D horizontal array)
               if (startRow === endRow) {
-                const values = [];
+                const values: any[] = [];
                 for (let c = startCol; c <= endCol; c++) {
                   const key = `${startRow}-${c}`;
                   const cell = get().cells.get(key);
@@ -273,7 +294,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
               // Check if it's a single column (1D vertical array)
               if (startCol === endCol) {
-                const values = [];
+                const values: any[] = [];
                 for (let r = startRow; r <= endRow; r++) {
                   const key = `${r}-${startCol}`;
                   const cell = get().cells.get(key);
@@ -283,15 +304,15 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
               }
 
               // 2D array for multi-row, multi-column range
-              const values = [];
+              const values: any[] = [];
               for (let r = startRow; r <= endRow; r++) {
-                const row = [];
+                const rowArr: any[] = [];
                 for (let c = startCol; c <= endCol; c++) {
                   const key = `${r}-${c}`;
                   const cell = get().cells.get(key);
-                  row.push(cell?.rawValue ?? 0);
+                  rowArr.push(cell?.rawValue ?? 0);
                 }
-                values.push(row);
+                values.push(rowArr);
               }
               return values;
             }
@@ -320,7 +341,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
           trim: (str: string) => str.trim(),
 
           range: (start: number, end: number) => {
-            const arr = [];
+            const arr: number[] = [];
             for (let i = start; i <= end; i++) arr.push(i);
             return arr;
           },
@@ -347,9 +368,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
         updatedCell.displayValue = formatCellValue(updatedCell);
 
-        set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell),
-        }));
+        set((state) => {
+          const newCells = new Map(state.cells);
+          newCells.set(key, updatedCell);
+          return { cells: newCells };
+        });
 
         // Recalculate dependents
         get().recalculateDependents(key);
@@ -357,15 +380,17 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         const updatedCell: Cell = {
           ...cell,
           error: {
-            message: err.message || "Formula error",
+            message: err?.message ?? "Formula error",
             type: "formula",
-          },
+          } as NonNullable<Cell["error"]>,
           displayValue: "#ERROR!",
         };
 
-        set((state) => ({
-          cells: new Map(state.cells).set(key, updatedCell),
-        }));
+        set((state) => {
+          const newCells = new Map(state.cells);
+          newCells.set(key, updatedCell);
+          return { cells: newCells };
+        });
       }
     },
 
@@ -388,12 +413,12 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       const key = `${row}-${col}`;
       const existing = get().cells.get(key) || createDefaultCell();
 
-      set((state) => ({
-        cells: new Map(state.cells).set(key, {
-          ...existing,
-          style: { ...existing.style, ...style },
-        }),
-      }));
+      set((state) => {
+        const newCells = new Map(state.cells);
+        const merged = { ...existing, style: { ...existing.style, ...style } };
+        newCells.set(key, merged);
+        return { cells: newCells };
+      });
     },
 
     setCellDataType: (row, col, dataType) => {
@@ -401,7 +426,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       const existing = get().cells.get(key) || createDefaultCell();
 
       // Validate current value against new type
-      let error = null;
+      let error: Cell["error"] = null;
       if (
         existing.rawValue !== null &&
         existing.rawValue !== undefined &&
@@ -410,8 +435,8 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         if (!validateType(existing.rawValue, dataType)) {
           error = {
             message: `Current value doesn't match type: ${dataType}`,
-            type: "type-mismatch" as const,
-          };
+            type: "type-mismatch",
+          } as NonNullable<Cell["error"]>;
         }
       }
 
@@ -424,9 +449,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
       updatedCell.displayValue = formatCellValue(updatedCell);
 
-      set((state) => ({
-        cells: new Map(state.cells).set(key, updatedCell),
-      }));
+      set((state) => {
+        const newCells = new Map(state.cells);
+        newCells.set(key, updatedCell);
+        return { cells: newCells };
+      });
     },
 
     setCellFormatting: (row, col, formatting) => {
@@ -440,9 +467,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
       updatedCell.displayValue = formatCellValue(updatedCell);
 
-      set((state) => ({
-        cells: new Map(state.cells).set(key, updatedCell),
-      }));
+      set((state) => {
+        const newCells = new Map(state.cells);
+        newCells.set(key, updatedCell);
+        return { cells: newCells };
+      });
     },
 
     setColumnWidth: (index, width) => {
@@ -459,8 +488,19 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
     setResizeRulerPos: (pos) => set({ resizeRulerPos: pos }),
 
-    startSelection: (cell, ctrlKey = false) =>
+    startSelection: (cell, ctrlKey = false) => 
       set((state) => {
+        if(state.editingState && state.isEditingFormula()) {
+          const range: SelectionRange = { start: cell, end: cell };
+          return {
+            isSelecting: true,
+            editingState: {
+              ...state.editingState,
+              insertingRange: range,
+              insertingRangeStart: range.start,
+            }
+          }
+        }
         const range: SelectionRange = { start: cell, end: cell };
         return {
           isSelecting: true,
@@ -472,6 +512,30 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       }),
 
     extendSelection: (cell) => {
+      const state = get();
+      if(state.editingState && state.isEditingFormula() &&state.editingState.insertingRange){
+        const currentCell = state.editingState.insertingRangeStart;
+        let start = { col: 0, row: 0 };
+        let end = { col: 0, row: 0 };
+        if (currentCell) {
+          start = {
+            col: Math.min(currentCell.col, cell.col),
+            row: Math.min(currentCell.row, cell.row),
+          };
+          end = {
+            col: Math.max(currentCell.col, cell.col),
+            row: Math.max(currentCell.row, cell.row),
+          };
+          const updatedRange: SelectionRange = { start: start, end: end };
+            set({
+            editingState: 
+            {
+              ...state.editingState,
+              insertingRange: updatedRange,
+            }
+          });
+        }
+      }
       const ranges = get().selectionRanges;
       if (!ranges.length) return;
 
@@ -488,7 +552,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
           row: Math.max(currentCell.row, cell.row),
         };
       }
-      const updatedLast = { start: start, end: end };
+      const updatedLast: SelectionRange = { start: start, end: end };
       set({
         selectionRanges: [...ranges.slice(0, -1), updatedLast],
       });
@@ -496,7 +560,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
     endSelection: () => set({ isSelecting: false }),
 
-    clearSelection: () => set({ selectionRanges: [] }),
+    clearSelection: () => set({ selectionRanges: [] as SelectionRange[] }),
 
     isCellSelected: (row, col) => {
       return get().selectionRanges.some(({ start, end }) => {
@@ -525,20 +589,22 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       const copiedCells: ClipboardData["cells"] = [];
 
       for (let r = startRow; r <= endRow; r++) {
-        const row = [];
+        const rowArr: ClipboardData["cells"][number] = [];
         for (let c = startCol; c <= endCol; c++) {
           const key = `${r}-${c}`;
           const cell = cells.get(key);
 
-          row.push({
+          const entry: ClipboardData["cells"][number][number] = {
             rawValue: cell?.rawValue ?? null,
             formula: cell?.formula ?? null,
-            style: cell?.style ?? {},
-            formatting: cell?.formatting ?? "general",
-            dataType: cell?.dataType ?? "undefined",
-          });
+            style: (cell?.style ?? {}) as CSSProperties,
+            formatting: (cell?.formatting ?? ("general" as Format)) as Format,
+            dataType: (cell?.dataType ?? ("undefined" as DataType)) as DataType,
+          };
+
+          rowArr.push(entry);
         }
-        copiedCells.push(row);
+        copiedCells.push(rowArr);
       }
 
       set({
@@ -557,10 +623,10 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     },
 
     cutSelection: () => {
-      const { selectionRanges, cells } = get();
+      const { selectionRanges } = get();
       if (selectionRanges.length === 0) return;
 
-      // Same as copy but mark as cut
+      // Use copySelection to populate clipboard
       get().copySelection();
 
       set((state) => ({
@@ -571,7 +637,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
     },
 
     paste: () => {
-      const { clipboard, currentCell, cells, setCell } = get();
+      const { clipboard, currentCell } = get();
       if (!clipboard || !currentCell) return;
 
       const targetRow = currentCell.row;
@@ -591,26 +657,24 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
           // Paste value or formula
           if (sourceCell.formula) {
-            // TODO:: For formulas, we need to adjust cell references
-            // For now, just paste the formula as-is
-            setCell(destRow, destCol, sourceCell.formula);
+            // TODO: adjust references on paste
+            get().setCell(destRow, destCol, sourceCell.formula);
           } else {
-            setCell(destRow, destCol, sourceCell.rawValue);
+            get().setCell(destRow, destCol, sourceCell.rawValue);
           }
 
           // Apply formatting and style
           const key = `${destRow}-${destCol}`;
           set((state) => {
-            const existingCell = state.cells.get(key); // Get fresh cell
+            const existingCell = state.cells.get(key);
             if (existingCell) {
-              return {
-                cells: new Map(state.cells).set(key, {
-                  // Use state.cells, not captured cells
-                  ...existingCell,
-                  style: { ...sourceCell.style },
-                  formatting: sourceCell.formatting,
-                }),
-              };
+              const newCells = new Map(state.cells);
+              newCells.set(key, {
+                ...existingCell,
+                style: { ...(sourceCell.style ?? {}) },
+                formatting: sourceCell.formatting,
+              });
+              return { cells: newCells };
             }
             return state;
           });
@@ -622,7 +686,7 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         const { startRow, endRow, startCol, endCol } = clipboard.sourceRange;
         for (let r = startRow; r <= endRow; r++) {
           for (let c = startCol; c <= endCol; c++) {
-            setCell(r, c, "");
+            get().setCell(r, c, "");
           }
         }
 

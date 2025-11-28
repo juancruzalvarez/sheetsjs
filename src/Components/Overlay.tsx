@@ -15,6 +15,7 @@ export const Overlay: React.FC<OverlayProps> = ({
   const rowHeights = useSpreadsheetStore((state) => state.rowHeights);
   const selectionRanges = useSpreadsheetStore((state) => state.selectionRanges);
   const formulaReferences = useSpreadsheetStore((state) => state.formulaReferences);
+  const insertingRange = useSpreadsheetStore((state) => state.editingState?.insertingRange);
   const clipboard = useSpreadsheetStore((state) => state.clipboard);
 
   return (
@@ -89,6 +90,25 @@ export const Overlay: React.FC<OverlayProps> = ({
               cumulativeColWidths[clipboard.sourceRange?.endCol + 1] -
               cumulativeColWidths[clipboard.sourceRange?.startCol],
             border: clipboard.isCut ? '2px dashed red' : '2px dashed blue',
+            zIndex: 30,
+          }}
+        />
+      }
+      {insertingRange &&
+        <div
+          key={`clipboard-ref`}
+          className="absolute pointer-events-none"
+          style={{
+            pointerEvents: "none",
+            left: cumulativeColWidths[insertingRange.start.col],
+            top: cumulativeRowHeights[insertingRange.start.row],
+            height:
+              cumulativeRowHeights[insertingRange.end.row + 1] -
+              cumulativeRowHeights[insertingRange.start.row],
+            width:
+              cumulativeColWidths[insertingRange.end.col + 1] -
+              cumulativeColWidths[insertingRange.start.col],
+            border: '2px dashed green' ,
             zIndex: 30,
           }}
         />

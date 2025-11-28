@@ -333,3 +333,38 @@ export const getFormulaReferences = (formula: string): SelectionRange[] => {
   
   return ranges;
 };
+
+export function insertCellReference(
+  edit: {text: string, cursorPos: number},
+  newRange: string
+): {text: string, cursorPos: number} {
+  const { text, cursorPos } = edit;
+  const insertText = `cell("${newRange}")`;
+
+  const before = text.slice(0, cursorPos);
+  const after = text.slice(cursorPos);
+
+  // Regex: match cell('A1'), cell("A1:A3"), case-insensitive
+  const cellRefRegex = /cell\(\s*(['"])([A-Za-z0-9:]+)\1\s*\)$/i;
+
+  // --- 1. Check if cursor is *just after* a cell() reference ---
+  const beforeMatch = before.match(cellRefRegex);
+
+  if (beforeMatch) {
+    // Replace the matched part entirely with new ref
+    const startOfMatch = before.lastIndexOf(beforeMatch[0]);
+    const newBefore =
+      before.slice(0, startOfMatch) + insertText;
+
+    const newText = newBefore + after;
+    const newCursor = newBefore.length;
+
+    return { text: newText, cursorPos: newCursor };
+  }
+
+  // --- 2. Cursor is NOT after a reference → insert normally ---
+  const newText = before + insertText + after;
+  const newCursor = before.length + insertText.length;
+
+  return { text: newText, cursorPos: newCursor };
+}

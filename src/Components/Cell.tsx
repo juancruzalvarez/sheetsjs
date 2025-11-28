@@ -1,5 +1,6 @@
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { useSpreadsheetStore } from '../Stores/spreadsheetStore';
+import { insertCellReference } from '../Services/utils';
 
 interface CellProps {
   row: number;
