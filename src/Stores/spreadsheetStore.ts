@@ -14,6 +14,8 @@ import {
   parseFormulaDependencies,
   cellRefToPosition,
   getFormulaReferences,
+  positionToCellRef,
+  insertCellReference,
 } from "../Services/utils";
 import {
   Cell,
@@ -23,6 +25,7 @@ import {
   Format,
   SelectionRange,
 } from "../Services/types";
+
 export interface SpreadsheetStore {
   rowCount: number;
   columnCount: number;
@@ -41,13 +44,13 @@ export interface SpreadsheetStore {
   // Dependency graph
   dependencyGraph: Map<string, Set<string>>;
   formulaReferences: SelectionRange[];
-  editingState: { 
+  editingState: {
     cell: CellPos;
     value: string;
     cursorPos: number;
     insertingRange: SelectionRange | null;
     insertingRangeStart: CellPos | null;
-   } | null;
+  } | null;
 
   clipboard: ClipboardData | null;
 
@@ -74,7 +77,12 @@ export interface SpreadsheetStore {
   clearSelection: () => void;
   isCellSelected: (row: number, col: number) => boolean;
 
-  setEditingState: (row: number, col: number, value: string, cursorPos: number) => void;
+  setEditingState: (
+    row: number,
+    col: number,
+    value: string,
+    cursorPos: number
+  ) => void;
   stopEditing: () => void;
   isEditingFormula: () => boolean;
 }
@@ -121,16 +129,16 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
         : ([] as SelectionRange[]);
 
       set({
-        editingState: { 
+        editingState: {
           cell: { row, col },
           value,
           cursorPos,
           insertingRange: get().editingState?.insertingRange || null,
-          insertingRangeStart: get().editingState?.insertingRangeStart || null
-         },
+          insertingRangeStart: get().editingState?.insertingRangeStart || null,
+        },
         formulaReferences: refs,
       });
-    },    
+    },
     stopEditing: () => {
       set({ editingState: null, formulaReferences: [] as SelectionRange[] });
     },
@@ -488,9 +496,9 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
     setResizeRulerPos: (pos) => set({ resizeRulerPos: pos }),
 
-    startSelection: (cell, ctrlKey = false) => 
+    startSelection: (cell, ctrlKey = false) =>
       set((state) => {
-        if(state.editingState && state.isEditingFormula()) {
+        if (state.editingState && state.isEditingFormula()) {
           const range: SelectionRange = { start: cell, end: cell };
           return {
             isSelecting: true,
@@ -498,8 +506,8 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
               ...state.editingState,
               insertingRange: range,
               insertingRangeStart: range.start,
-            }
-          }
+            },
+          };
         }
         const range: SelectionRange = { start: cell, end: cell };
         return {
@@ -513,7 +521,11 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
 
     extendSelection: (cell) => {
       const state = get();
-      if(state.editingState && state.isEditingFormula() &&state.editingState.insertingRange){
+      if (
+        state.editingState &&
+        state.isEditingFormula() &&
+        state.editingState.insertingRange
+      ) {
         const currentCell = state.editingState.insertingRangeStart;
         let start = { col: 0, row: 0 };
         let end = { col: 0, row: 0 };
@@ -527,14 +539,14 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
             row: Math.max(currentCell.row, cell.row),
           };
           const updatedRange: SelectionRange = { start: start, end: end };
-            set({
-            editingState: 
-            {
+          set({
+            editingState: {
               ...state.editingState,
               insertingRange: updatedRange,
-            }
+            },
           });
         }
+        return;
       }
       const ranges = get().selectionRanges;
       if (!ranges.length) return;
@@ -558,7 +570,35 @@ export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {
       });
     },
 
-    endSelection: () => set({ isSelecting: false }),
+    endSelection: () => {
+      const state = get();
+      if (
+        state.editingState &&
+        state.isEditingFormula() &&
+        state.editingState.insertingRange
+      ) {
+        const start = state.editingState.insertingRange.start;
+        const end = state.editingState.insertingRange.end;
+        const isSingle = start === end;
+        let newRange =
+          positionToCellRef(start.row, start.col) +( isSingle
+            ? ""
+            : ":" + positionToCellRef(end.row, end.col));
+        console.log('new range: ', newRange)
+        const res = insertCellReference(
+          {
+            text: state.editingState.value,
+            cursorPos: state.editingState.cursorPos,
+          },
+          newRange
+        );
+        console.log('NEW TEXT!', res.text);
+        window.dispatchEvent(new CustomEvent('insertFormulaReference', {
+          detail: { text: res.text, cursorPos: res.cursorPos }
+        }));
+      }
+      set({ isSelecting: false });
+    },
 
     clearSelection: () => set({ selectionRanges: [] as SelectionRange[] }),
 

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { cellRefToPosition } from "../Services/utils";
 
-import ReactCodeMirror from "@uiw/react-codemirror";
+import ReactCodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 
 interface HelperSidebarProps {
@@ -183,6 +183,7 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
 
   const resizeRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
+  const viewRef = useRef<EditorView>(null);
 
   const setEditingState = useSpreadsheetStore((state) => state.setEditingState);
   const stopEdit = useSpreadsheetStore((state) => state.stopEditing);
@@ -226,6 +227,34 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
+
+   useEffect(() => {
+    function handler(e: CustomEvent) {
+      const { text, cursorPos } = e.detail;
+      const view = viewRef.current;
+      if (!view) return;
+
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: text,
+        },
+      });
+
+      // Set cursor
+      view.dispatch({
+        selection: { anchor: cursorPos },
+        scrollIntoView: true,
+      });
+
+      view.focus();
+    }
+
+    window.addEventListener("insertFormulaReference", handler as EventListener);
+    return () =>
+      window.removeEventListener("insertFormulaReference", handler as EventListener);
+  }, []);
 
   const getCellReference = () => {
     if (!currentCell) return "";
@@ -421,6 +450,9 @@ const Editor: React.FC<EditorProps> = ({ onClose }) => {
             value={code}
             height="100%"
             extensions={[javascript()]}
+            onCreateEditor={(view) => {
+              viewRef.current = view;   
+            }}
             onChange={(value) => {
               setCode(value);
             }}

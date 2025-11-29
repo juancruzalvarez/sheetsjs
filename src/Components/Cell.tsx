@@ -63,6 +63,8 @@ const Cell = memo<CellProps>(({ row, col, top, left, height, width }) => {
   }, [row, col, startEdit]);
 
   const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+
     console.log(cellData)
     if (editing) return;
     

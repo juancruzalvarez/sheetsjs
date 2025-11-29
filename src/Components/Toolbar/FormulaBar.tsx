@@ -8,6 +8,7 @@ const FormulaBar: React.FC = () => {
   const setEditingState = useSpreadsheetStore((state) => state.setEditingState);
   const stopEdit = useSpreadsheetStore((state) => state.stopEditing);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  
 
   // Only get the specific cell we need
   const cellData = useSpreadsheetStore(
@@ -51,6 +52,7 @@ const FormulaBar: React.FC = () => {
     if (currentCell && isEditingFormulaBar) {
       setCell(currentCell.row, currentCell.col, formulaBarValue);
       setIsEditingFormulaBar(false);
+      stopEdit();
     }
   };
 
@@ -63,10 +65,36 @@ const FormulaBar: React.FC = () => {
       }
     }
     if (e.key === "Escape") {
-      setFormulaBarValue(cellValue);
-      setIsEditingFormulaBar(false);
+      handleFormulaBarBlur();
     }
   };
+
+  // Handle formula insertion by clicking cells while editing.
+  useEffect(() => {
+    function handler(e: CustomEvent) {
+      const { text, cursorPos } = e.detail;
+      console.log('handling event:', e.detail)
+
+      // Update the formula bar value
+      handleFormulaBarChange(text);
+
+      // Update cursor position
+      if(isEditingFormulaBar){
+        requestAnimationFrame(() => {
+            const input = inputRef.current;
+            if (!input) return;
+
+            input.focus();
+            input.setSelectionRange(cursorPos, cursorPos);
+        });
+      }
+      
+    }
+
+    window.addEventListener("insertFormulaReference", handler as EventListener);
+    return () =>
+      window.removeEventListener("insertFormulaReference", handler as EventListener);
+  }, [handleFormulaBarChange]);
 
   const updateEditingState = (value: string) => {
     if (!currentCell || !inputRef.current) return;
