@@ -23,6 +23,7 @@ import {
   ClipboardData,
   DataType,
   Format,
+  Macro,
   SelectionRange,
 } from "../Services/types";
 
@@ -53,6 +54,7 @@ export interface SpreadsheetStore {
   } | null;
 
   clipboard: ClipboardData | null;
+  macros: Macro[]
 
   // Actions
   copySelection: () => void;
@@ -85,6 +87,7 @@ export interface SpreadsheetStore {
   ) => void;
   stopEditing: () => void;
   isEditingFormula: () => boolean;
+  
 }
 
 export const useSpreadsheetStore = create<SpreadsheetStore>((set, get) => {

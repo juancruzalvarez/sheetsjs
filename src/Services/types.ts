@@ -58,6 +58,11 @@ export interface SelectionRange {
   end: CellPos;
 }
 
+export interface Macro {
+  name: string;
+  code: string;
+
+};
 
 export interface ClipboardData {
   cells: Array<Array<{
